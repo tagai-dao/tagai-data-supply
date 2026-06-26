@@ -6,6 +6,7 @@ import { nodeRoutes } from './routes/node';
 import { adminAuth } from './middleware/adminAuth';
 import { createWsServer } from './ws';
 import { scheduler } from '../scheduler';
+import { cleanupRetainedData } from '../health/db';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -27,7 +28,10 @@ if (require.main === module) {
   });
   // spec §8: 启动调度器
   scheduler.start();
-  const shutdown = () => { scheduler.stop(); process.exit(0); };
+  // spec §5.5: 数据保留清理 job（每天一次）
+  const cleanupTimer = setInterval(() => { cleanupRetainedData().catch(() => {}); }, 24 * 60 * 60 * 1000);
+  cleanupTimer.unref?.();
+  const shutdown = () => { scheduler.stop(); clearInterval(cleanupTimer); process.exit(0); };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 }

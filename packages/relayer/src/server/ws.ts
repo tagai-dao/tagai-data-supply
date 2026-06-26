@@ -11,6 +11,7 @@ import {
 } from '../db/client';
 import { getAssignmentBySubtaskAndNode } from '../db/tasks';
 import { ingestTaskResult } from '../ingestion';
+import { applyCookieEvent, reclaimNodeAssignments } from '../health/db';
 import { PROTOCOL_VERSION } from '@tds/shared';
 import {
   HEARTBEAT_PING_INTERVAL_SEC,
@@ -142,13 +143,19 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
     clearInterval(pingTimer);
     if (nodeId) {
       registry.unregister(nodeId);
-      // spec §5/§8: 离线标记（回收 grace period 在 P5）
+      // spec §5/§8: 离线标记
       try {
         await deps.setNodeStatus(nodeId, 'offline');
       } catch (e) {
         logger.error(e, 'setNodeStatus offline failed');
       }
-      logger.info({ node_id: nodeId }, 'ws closed, node offline');
+      // spec §10.2/§8.5: 回收该节点 active assignment（grace period 由调度器重派时限次保证）
+      try {
+        await reclaimNodeAssignments(nodeId);
+      } catch (e) {
+        logger.error(e, 'reclaim failed');
+      }
+      logger.info({ node_id: nodeId }, 'ws closed, node offline, assignments reclaimed');
     }
   });
 
@@ -176,6 +183,12 @@ async function handleTaskResult(nodeId: string, msg: any): Promise<void> {
       error: msg.error,
       cookie_status: msg.cookie_status,
     });
+    // spec §5.4: 根据 cookie_status 更新健康分
+    if (msg.cookie_status && msg.cookie_status !== 'ok' && msg.cookie_status !== 'unknown') {
+      await applyCookieEvent(nodeId, msg.cookie_status, `task_result ${subtaskId}`);
+    } else if (msg.status === 'done') {
+      await applyCookieEvent(nodeId, 'ok');
+    }
   } catch (e) {
     logger.error(e, 'handleTaskResult failed');
   }
