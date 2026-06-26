@@ -1,0 +1,16 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "hello.json",
+  "title": "Hello",
+  "type": "object",
+  "required": ["type", "node_token", "protocol_version", "timezone", "cookie_status"],
+  "properties": {
+    "type": { "const": "hello" },
+    "node_token": { "type": "string", "minLength": 1 },
+    "protocol_version": { "type": "string" },
+    "timezone": { "type": "string" },
+    "cookie_status": { "type": "string", "enum": ["ok", "rate_limited", "auth_failed", "error", "unknown"] },
+    "label": { "type": "string" }
+  },
+  "additionalProperties": false
+}

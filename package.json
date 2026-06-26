@@ -1,0 +1,13 @@
+{
+  "name": "tagai-data-supply",
+  "private": true,
+  "workspaces": [
+    "packages/shared",
+    "packages/relayer"
+  ],
+  "scripts": {
+    "build:shared": "yarn workspace @tds/shared run build",
+    "build:relayer": "yarn workspace @tds/relayer run build",
+    "test": "yarn workspaces run test"
+  }
+}

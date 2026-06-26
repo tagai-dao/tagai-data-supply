@@ -1,0 +1,12 @@
+README.md
+pyproject.toml
+src/tagai_data_supply/__init__.py
+src/tagai_data_supply/cli.py
+src/tagai_data_supply/config.py
+src/tagai_data_supply_node.egg-info/PKG-INFO
+src/tagai_data_supply_node.egg-info/SOURCES.txt
+src/tagai_data_supply_node.egg-info/dependency_links.txt
+src/tagai_data_supply_node.egg-info/entry_points.txt
+src/tagai_data_supply_node.egg-info/requires.txt
+src/tagai_data_supply_node.egg-info/top_level.txt
+tests/test_config.py

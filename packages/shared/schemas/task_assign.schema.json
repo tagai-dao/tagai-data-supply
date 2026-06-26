@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "task_assign.json",
+  "title": "TaskAssign",
+  "type": "object",
+  "required": ["type", "subtask_id", "task_type", "params", "mode"],
+  "properties": {
+    "type": { "const": "task_assign" },
+    "subtask_id": { "type": "string" },
+    "task_type": { "type": "string", "enum": ["hashtag", "user_timeline", "keyword", "list"] },
+    "params": { "type": "object" },
+    "mode": { "type": "string", "enum": ["continuous", "round"] },
+    "cursor": { "type": "string" },
+    "round_window": { "type": "object" }
+  },
+  "additionalProperties": false
+}

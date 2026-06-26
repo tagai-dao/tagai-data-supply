@@ -1,0 +1,2 @@
+[console_scripts]
+tagai-node = tagai_data_supply.cli:main

@@ -1,0 +1,28 @@
+[project]
+name = "tagai-data-supply-node"
+version = "0.0.1"
+description = "tagai-data-supply 抓取节点（用户自部署）"
+requires-python = ">=3.10"
+dependencies = [
+    "websockets>=12.0",
+    "pydantic>=2.7",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+scraper = ["twikit>=2.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+tagai-node = "tagai_data_supply.cli:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

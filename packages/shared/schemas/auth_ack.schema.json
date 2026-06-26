@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "auth_ack.json",
+  "title": "AuthAck",
+  "type": "object",
+  "required": ["type", "node_id", "protocol_version"],
+  "properties": {
+    "type": { "const": "auth_ack" },
+    "node_id": { "type": "string" },
+    "protocol_version": { "type": "string" }
+  },
+  "additionalProperties": false
+}

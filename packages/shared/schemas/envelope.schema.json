@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "envelope.json",
+  "title": "Envelope",
+  "description": "WS 消息信封，type 区分消息类型",
+  "type": "object",
+  "required": ["type"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": ["hello", "auth_ack", "heartbeat", "ping", "pong", "task_assign", "task_cancel", "task_result", "cookie_status", "unregister"]
+    }
+  }
+}

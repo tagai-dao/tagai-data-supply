@@ -1,0 +1,10 @@
+websockets>=12.0
+pydantic>=2.7
+click>=8.1
+
+[dev]
+pytest>=8.0
+pytest-asyncio>=0.23
+
+[scraper]
+twikit>=2.0

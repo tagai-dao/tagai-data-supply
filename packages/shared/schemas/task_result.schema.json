@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "task_result.json",
+  "title": "TaskResult",
+  "type": "object",
+  "required": ["type", "subtask_id", "status"],
+  "properties": {
+    "type": { "const": "task_result" },
+    "subtask_id": { "type": "string" },
+    "status": { "type": "string", "enum": ["done", "failed"] },
+    "tweets": { "type": "array", "items": { "type": "object" } },
+    "next_cursor": { "type": "string" },
+    "error": { "type": "string" },
+    "cookie_status": { "type": "string", "enum": ["ok", "rate_limited", "auth_failed", "error", "unknown"] }
+  },
+  "additionalProperties": false
+}

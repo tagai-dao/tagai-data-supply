@@ -1,0 +1,13 @@
+Metadata-Version: 2.4
+Name: tagai-data-supply-node
+Version: 0.0.1
+Summary: tagai-data-supply 抓取节点（用户自部署）
+Requires-Python: >=3.10
+Requires-Dist: websockets>=12.0
+Requires-Dist: pydantic>=2.7
+Requires-Dist: click>=8.1
+Provides-Extra: scraper
+Requires-Dist: twikit>=2.0; extra == "scraper"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23; extra == "dev"
