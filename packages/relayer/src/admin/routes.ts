@@ -1,0 +1,130 @@
+// spec §12: 管理 API（/admin/*，固定 token 鉴权）
+import { Router, Response } from 'express';
+import { nanoid } from 'nanoid';
+import { issueInvite } from '../auth/tokens';
+import { createInvite, listOnlineNodes, setNodeStatus } from '../db/client';
+import { pool } from '../db/pool';
+import {
+  createTopic, listTopics, createSubtask, listEnabledSubtasks, setSubtaskEnabled,
+  validateSubtaskTick, type CreateSubtaskInput,
+} from '../db/tasks';
+import { reclaimNodeAssignments, reEnableNode } from '../health/db';
+import { logger } from '../utils/logger';
+
+export const adminRoutes = Router();
+
+// ---- invite ----
+adminRoutes.post('/invites', async (_req, res: Response) => {
+  const i = issueInvite();
+  await createInvite(i.invite_id, i.invite_secret_hash);
+  logger.info({ invite_id: i.invite_id }, 'invite created');
+  res.json({ c: 0, d: { invite_id: i.invite_id, invite_secret: i.invite_secret } });
+});
+
+// ---- topic ----
+adminRoutes.get('/topics', async (_req, res) => {
+  const topics = await listTopics();
+  res.json({ c: 0, d: topics });
+});
+
+adminRoutes.post('/topics', async (req, res) => {
+  const { name, tick } = req.body ?? {};
+  if (!name) { res.status(400).json({ c: 1, m: 'name required' }); return; }
+  const topic_id = 'topic_' + nanoid(12);
+  await createTopic(topic_id, name, tick);
+  res.json({ c: 0, d: { topic_id, name, tick: tick ?? 'no-tick-of-tiptag' } });
+});
+
+// ---- subtask ----
+adminRoutes.get('/subtasks', async (_req, res) => {
+  const subtasks = await listEnabledSubtasks();
+  res.json({ c: 0, d: subtasks });
+});
+
+adminRoutes.post('/subtasks', async (req, res) => {
+  const b = req.body ?? {};
+  // spec §5.1: tick 必填
+  try {
+    validateSubtaskTick(b.tick);
+  } catch (e: any) {
+    res.status(400).json({ c: 1, m: e.message });
+    return;
+  }
+  const input: CreateSubtaskInput = {
+    subtask_id: 'st_' + nanoid(12),
+    topic_id: b.topic_id,
+    type: b.type,
+    mode: b.mode ?? 'continuous',
+    params: b.params ?? {},
+    tick: b.tick,
+    priority: b.priority ?? 5,
+    schedule_cron: b.schedule_cron ?? null,
+    window_minutes: b.window_minutes ?? null,
+  };
+  if (!input.topic_id || !input.type) {
+    res.status(400).json({ c: 1, m: 'topic_id and type required' });
+    return;
+  }
+  await createSubtask(input);
+  logger.info({ subtask_id: input.subtask_id, tick: input.tick }, 'subtask created');
+  res.json({ c: 0, d: input });
+});
+
+adminRoutes.patch('/subtasks/:id', async (req, res) => {
+  const enabled = req.body?.enabled;
+  if (typeof enabled !== 'boolean') {
+    res.status(400).json({ c: 1, m: 'enabled (bool) required' });
+    return;
+  }
+  await setSubtaskEnabled(req.params.id, enabled);
+  res.json({ c: 0, d: { subtask_id: req.params.id, enabled } });
+});
+
+// ---- node ----
+adminRoutes.get('/nodes', async (_req, res) => {
+  const [rows] = await pool.execute(
+    'SELECT node_id, label, status, timezone, cookie_health, last_heartbeat, created_at FROM `tds_node` ORDER BY created_at DESC',
+  );
+  res.json({ c: 0, d: rows });
+});
+
+adminRoutes.post('/nodes/:id/reclaim', async (req, res) => {
+  const n = await reclaimNodeAssignments(req.params.id);
+  res.json({ c: 0, d: { node_id: req.params.id, reclaimed: n } });
+});
+
+adminRoutes.post('/nodes/:id/reenable', async (req, res) => {
+  await reEnableNode(req.params.id);
+  res.json({ c: 0, d: { node_id: req.params.id, status: 'online' } });
+});
+
+adminRoutes.post('/nodes/:id/disable', async (req, res) => {
+  await setNodeStatus(req.params.id, 'disabled');
+  await reclaimNodeAssignments(req.params.id);
+  res.json({ c: 0, d: { node_id: req.params.id, status: 'disabled' } });
+});
+
+// ---- 数据状态 ----
+adminRoutes.get('/stats', async (_req, res) => {
+  const [nodes] = await pool.execute<any[]>(
+    "SELECT status, COUNT(*) AS cnt FROM `tds_node` GROUP BY status",
+  );
+  const [tweets] = await pool.execute<any[]>(
+    'SELECT COUNT(*) AS cnt FROM `tds_tweet_raw`',
+  );
+  const [promoted] = await pool.execute<any[]>(
+    "SELECT COUNT(*) AS cnt FROM `tds_tweet_raw` WHERE promoted = 1",
+  );
+  const [assignments] = await pool.execute<any[]>(
+    "SELECT status, COUNT(*) AS cnt FROM `tds_assignment` GROUP BY status",
+  );
+  res.json({
+    c: 0,
+    d: {
+      nodes: Object.fromEntries(nodes.map((r: any) => [r.status, r.cnt])),
+      raw_total: tweets[0]?.cnt ?? 0,
+      promoted: promoted[0]?.cnt ?? 0,
+      assignments: Object.fromEntries(assignments.map((r: any) => [r.status, r.cnt])),
+    },
+  });
+});

@@ -7,6 +7,7 @@ import { adminAuth } from './middleware/adminAuth';
 import { createWsServer } from './ws';
 import { scheduler } from '../scheduler';
 import { cleanupRetainedData } from '../health/db';
+import { adminRoutes } from '../admin/routes';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -16,8 +17,8 @@ app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 // 节点注册（REST，spec §10.1）
 app.use('/node', nodeRoutes);
 
-// 管理 API（固定 token 鉴权，spec §12）—— 路由 P6 填充
-app.use('/admin', adminAuth, (_req, res) => res.json({ ok: true }));
+// 管理 API（固定 token 鉴权，spec §12）
+app.use('/admin', adminAuth, adminRoutes);
 
 if (require.main === module) {
   const httpServer = createServer(app);
