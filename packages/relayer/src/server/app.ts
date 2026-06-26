@@ -5,6 +5,7 @@ import { logger } from '../utils/logger';
 import { nodeRoutes } from './routes/node';
 import { adminAuth } from './middleware/adminAuth';
 import { createWsServer } from './ws';
+import { scheduler } from '../scheduler';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -24,7 +25,13 @@ if (require.main === module) {
   httpServer.listen(config.httpPort, () => {
     logger.info({ http: config.httpPort, ws: config.httpPort }, 'relayer listening');
   });
+  // spec §8: 启动调度器
+  scheduler.start();
+  const shutdown = () => { scheduler.stop(); process.exit(0); };
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 }
 
 export { app };
+
 

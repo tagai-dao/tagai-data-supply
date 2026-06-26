@@ -9,6 +9,8 @@ import {
   updateHeartbeat,
   type NodeRow,
 } from '../db/client';
+import { getAssignmentBySubtaskAndNode } from '../db/tasks';
+import { ingestTaskResult } from '../ingestion';
 import { PROTOCOL_VERSION } from '@tds/shared';
 import {
   HEARTBEAT_PING_INTERVAL_SEC,
@@ -119,10 +121,15 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
         // lastActivity 已更新
         break;
       case 'task_result':
+        await handleTaskResult(nodeId!, msg);
+        break;
       case 'cookie_status':
+        // P5 cookie 健康处理
+        logger.debug({ node_id: nodeId, cookie_status: msg.cookie_status }, 'cookie_status');
+        break;
       case 'unregister':
-        // P3/P4/P5 处理；此处仅记录活动
-        logger.debug({ node_id: nodeId, type: msg.type }, 'ws message (handler pending)');
+        logger.info({ node_id: nodeId }, 'node unregister');
+        ws.close(1000, 'unregister');
         break;
       default:
         logger.warn({ node_id: nodeId, type: msg.type }, 'ws unknown message type');
@@ -148,6 +155,30 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
   ws.on('error', (err) => {
     logger.warn({ err: err.message }, 'ws error');
   });
+}
+
+// spec §4: 处理节点回传 task_result → ingestion
+async function handleTaskResult(nodeId: string, msg: any): Promise<void> {
+  try {
+    const subtaskId = msg.subtask_id;
+    let assignmentId: string | undefined;
+    if (subtaskId) {
+      const asg = await getAssignmentBySubtaskAndNode(subtaskId, nodeId);
+      assignmentId = asg?.assignment_id;
+    }
+    await ingestTaskResult({
+      subtask_id: subtaskId,
+      node_id: nodeId,
+      assignment_id: assignmentId,
+      status: msg.status === 'done' ? 'done' : 'failed',
+      tweets: msg.tweets,
+      next_cursor: msg.next_cursor,
+      error: msg.error,
+      cookie_status: msg.cookie_status,
+    });
+  } catch (e) {
+    logger.error(e, 'handleTaskResult failed');
+  }
 }
 
 export function createWsServer(server?: Server): WebSocketServer {
