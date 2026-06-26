@@ -1,0 +1,42 @@
+name: build-node
+
+# spec §11/P7: node 全平台（Win/macOS/Linux）PyInstaller 构建矩阵
+on:
+  push:
+    tags: ['node-v*']
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: packages/node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -U pip
+          .venv/bin/pip install -e ".[dev,scraper]" pyinstaller
+        shell: bash
+      - name: Test
+        run: .venv/bin/pytest -q
+        shell: bash
+      - name: Build (PyInstaller)
+        run: .venv/bin/pyinstaller tagai-node.spec --noconfirm
+        shell: bash
+      # macOS 签名公证需在 macOS runner 配置 Apple Developer 证书（占位）：
+      # - import 证书到 keychain，codesign --options runtime，xcrun notarytool submit
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tagai-node-${{ matrix.os }}
+          path: packages/node/dist/tagai-node*
