@@ -1,5 +1,54 @@
 """一键化 CLI：configure / login / run。spec §11。"""
+from __future__ import annotations
+import asyncio
+import json
+import urllib.request
+import urllib.error
+from pathlib import Path
+
 import click
+
+from .config import NodeConfig, ensure_config_dir
+from .cookie import save_cookie, load_cookie
+from .node_state import save_state, load_state
+from .client.protocol import PROTOCOL_VERSION, RegisterRequest, RegisterResponse, CookieStatus
+from .client.ws import NodeClient
+
+
+def _local_timezone() -> str:
+    try:
+        import time
+        import zoneinfo  # py3.9+
+        local = time.localtime().tm_zone
+        # 退化处理：取不到就用 UTC
+        return local if local else "UTC"
+    except Exception:
+        return "UTC"
+
+
+def register_with_relayer(http_base: str, invite_secret: str, timezone: str, label: str | None = None) -> dict:
+    """调用 relayer POST /node/register，返回 {node_id, node_token, protocol_version}。spec §10.1。"""
+    req_body = RegisterRequest(
+        invite_secret=invite_secret,
+        protocol_version=PROTOCOL_VERSION,
+        timezone=timezone,
+        label=label,
+    ).model_dump()
+    url = http_base.rstrip("/") + "/node/register"
+    data = json.dumps(req_body).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+    # 禁用系统代理（macOS urllib 会读系统代理设置导致本地请求被代理 502）
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(req, timeout=15) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise click.ClickException(f"register failed: HTTP {e.code} {detail}")
+    parsed = RegisterResponse.model_validate(body)
+    if parsed.c != 0 or not parsed.d:
+        raise click.ClickException(f"register failed: {parsed.m}")
+    return parsed.d
 
 
 @click.group()
@@ -8,21 +57,68 @@ def cli():
 
 
 @cli.command()
-def configure():
-    """配置 relayer 地址（注册前用，或 invite 换 token）。"""
-    click.echo("configure: TODO (P1/P7)")
+@click.option("--http-base", prompt="Relayer HTTP 地址", help="relayer http base，如 http://host:7701")
+@click.option("--invite-secret", prompt="Invite secret", hide_input=True, help="一次性 invite secret")
+@click.option("--label", default=None, help="节点标签")
+def configure(http_base: str, invite_secret: str, label: str | None):
+    """配置并注册节点（用 invite 换 node_token，存本地）。spec §10.1。"""
+    ensure_config_dir()
+    tz = _local_timezone()
+    click.echo(f"注册中（timezone={tz}）...")
+    cred = register_with_relayer(http_base, invite_secret, tz, label)
+    # http base -> ws url
+    ws_url = http_base.replace("http://", "ws://").replace("https://", "wss://")
+    cfg = NodeConfig(relayer_url=ws_url, node_token=cred["node_token"], timezone=tz)
+    save_state(cfg)
+    click.echo(f"注册成功: node_id={cred['node_id']}")
+    click.echo(f"状态已保存。运行 `tagai-node run` 开始抓取。")
 
 
 @cli.command()
-def login():
-    """交互式输入 cookie（ct0 / auth_token），存本地。"""
-    click.echo("login: TODO (P2)")
+@click.option("--ct0", prompt="ct0", hide_input=True)
+@click.option("--auth-token", prompt="auth_token", hide_input=True)
+def login(ct0: str, auth_token: str):
+    """交互式输入 cookie（ct0 / auth_token），存本地。spec §11。"""
+    ensure_config_dir()
+    save_cookie(ct0, auth_token)
+    click.echo("cookie 已保存（权限 0600）。")
 
 
 @cli.command()
 def run():
-    """常驻运行：注册 → WS 连接 → 领任务 → 抓取 → 回传。"""
-    click.echo("run: TODO (P1)")
+    """常驻运行：WS 连接 → 鉴权 → 心跳 → 领任务 → 抓取 → 回传。spec §11。"""
+    cfg = load_state()
+    if not cfg or not cfg.node_token:
+        raise click.ClickException("未注册，请先运行 `tagai-node configure`")
+    ck = load_cookie()
+    cookie_status = CookieStatus.OK if ck else CookieStatus.UNKNOWN
+    if not ck:
+        click.echo("警告：未检测到 cookie，请运行 `tagai-node login`（当前仅待命）")
+
+    client = NodeClient(
+        relayer_url=cfg.relayer_url,
+        node_token=cfg.node_token,
+        timezone=cfg.timezone,
+        cookie_status=cookie_status,
+        on_task=_handle_task,
+    )
+    click.echo(f"运行中（relayer={cfg.relayer_url}, tz={cfg.timezone}）")
+    try:
+        asyncio.run(client.run())
+    except KeyboardInterrupt:
+        click.echo("停止中...")
+        client.stop()
+
+
+async def _handle_task(task: dict) -> dict:
+    """占位任务处理器：P2 接入 twikit 抓取。spec §7。"""
+    return {
+        "type": "task_result",
+        "subtask_id": task.get("subtask_id"),
+        "status": "failed",
+        "error": "scraper not implemented yet (P2)",
+        "cookie_status": CookieStatus.UNKNOWN.value,
+    }
 
 
 def main():

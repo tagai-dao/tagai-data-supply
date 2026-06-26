@@ -1,8 +1,10 @@
 import express from 'express';
+import { createServer } from 'http';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 import { nodeRoutes } from './routes/node';
 import { adminAuth } from './middleware/adminAuth';
+import { createWsServer } from './ws';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -16,9 +18,13 @@ app.use('/node', nodeRoutes);
 app.use('/admin', adminAuth, (_req, res) => res.json({ ok: true }));
 
 if (require.main === module) {
-  app.listen(config.httpPort, () => {
-    logger.info({ port: config.httpPort }, 'relayer http listening');
+  const httpServer = createServer(app);
+  // spec §6: WS 与 HTTP 共享端口（http 升级）
+  createWsServer(httpServer);
+  httpServer.listen(config.httpPort, () => {
+    logger.info({ http: config.httpPort, ws: config.httpPort }, 'relayer listening');
   });
 }
 
 export { app };
+

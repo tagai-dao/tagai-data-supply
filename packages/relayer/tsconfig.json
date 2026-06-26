@@ -9,11 +9,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "declaration": false,
-    "baseUrl": ".",
-    "paths": {
-      "@tds/shared": ["../shared/src"]
-    }
+    "declaration": false
   },
   "include": ["src/**/*"]
 }

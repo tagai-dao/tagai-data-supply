@@ -1,8 +1,8 @@
-import { Hello } from '../generated/hello';
-import { AuthAck } from '../generated/auth_ack';
-import { RegisterRequest } from '../generated/register_request';
-import { TaskAssign } from '../generated/task_assign';
-import { TaskResult } from '../generated/task_result';
+import { Hello } from './generated/hello';
+import { AuthAck } from './generated/auth_ack';
+import { RegisterRequest } from './generated/register_request';
+import { TaskAssign } from './generated/task_assign';
+import { TaskResult } from './generated/task_result';
 
 // spec §6: 协议版本
 export const PROTOCOL_VERSION = '1';

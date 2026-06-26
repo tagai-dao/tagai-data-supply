@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 const SCHEMA_DIR = path.join(__dirname, '..', 'schemas');
-const OUT_DIR = path.join(__dirname, '..', 'generated');
+const OUT_DIR = path.join(__dirname, '..', 'src', 'generated');
 fs.mkdirSync(OUT_DIR, { recursive: true });
 
 const files = ['hello', 'auth_ack', 'register_request', 'task_assign', 'task_result'];
