@@ -13,6 +13,8 @@ from .cookie import save_cookie, load_cookie
 from .node_state import save_state, load_state
 from .client.protocol import PROTOCOL_VERSION, RegisterRequest, RegisterResponse, CookieStatus
 from .client.ws import NodeClient
+from .runtime.executor import TaskExecutor
+from .scraper.twikit_scraper import TwikitScraper
 
 
 def _local_timezone() -> str:
@@ -95,12 +97,19 @@ def run():
     if not ck:
         click.echo("警告：未检测到 cookie，请运行 `tagai-node login`（当前仅待命）")
 
+    # 建抓取器 + 执行器（spec §2/P2）
+    on_task = None
+    if ck:
+        scraper = TwikitScraper(ct0=ck["ct0"], auth_token=ck["auth_token"])
+        executor = TaskExecutor(scraper)
+        on_task = _make_handler(executor)
+
     client = NodeClient(
         relayer_url=cfg.relayer_url,
         node_token=cfg.node_token,
         timezone=cfg.timezone,
         cookie_status=cookie_status,
-        on_task=_handle_task,
+        on_task=on_task,
     )
     click.echo(f"运行中（relayer={cfg.relayer_url}, tz={cfg.timezone}）")
     try:
@@ -110,15 +119,10 @@ def run():
         client.stop()
 
 
-async def _handle_task(task: dict) -> dict:
-    """占位任务处理器：P2 接入 twikit 抓取。spec §7。"""
-    return {
-        "type": "task_result",
-        "subtask_id": task.get("subtask_id"),
-        "status": "failed",
-        "error": "scraper not implemented yet (P2)",
-        "cookie_status": CookieStatus.UNKNOWN.value,
-    }
+def _make_handler(executor: TaskExecutor):
+    async def handler(task: dict) -> dict:
+        return await executor.handle(task)
+    return handler
 
 
 def main():
