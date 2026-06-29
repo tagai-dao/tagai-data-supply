@@ -5,11 +5,11 @@
 ### 前置
 - Node.js >= 18
 - MySQL（复用 tiptag 库 `tiptag`）
-- 独立 DB 用户 `tds_writer`（权限：`tds_*` 全权 + `bsc_tweet` 仅 INSERT）
+- 独立 DB 用户 `tds_writer`（权限：`bsc_tds_*` 全权 + `bsc_tweet` 仅 INSERT）
 
 ```sql
 CREATE USER 'tds_writer'@'%' IDENTIFIED BY '<pwd>';
-GRANT ALL PRIVILEGES ON tiptag.tds_* TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.bsc_tds_* TO 'tds_writer'@'%';
 GRANT INSERT ON tiptag.bsc_tweet TO 'tds_writer'@'%';
 FLUSH PRIVILEGES;
 ```
@@ -84,10 +84,10 @@ curl http://<relayer>:7701/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 ## 运维要点
-- **无状态**：relayer 调度状态全在 `tds_*`，重启自动 reconcile；调度器重启后从 DB 游标接续。
+- **无状态**：relayer 调度状态全在 `bsc_tds_*`，重启自动 reconcile；调度器重启后从 DB 游标接续。
 - **cookie 失效**：节点 `auth_failed` → `disabled` + 告警；用户本地更新 cookie 后 `tagai-node run` 重新 `hello`，或后台 `POST /admin/nodes/:id/reenable`。
 - **任务回收**：节点离线/disabled 时其 active assignment 自动 reclaim，调度器重派（从 DB cursor 恢复）。
-- **数据保留**：`tds_tweet_raw` 7d / `cookie_health_log` 30d / `node_metric` 90d，relayer 每日清理。
+- **数据保留**：`bsc_tds_tweet_raw` 7d / `bsc_tds_cookie_health_log` 30d / `bsc_tds_node_metric` 90d，relayer 每日清理。
 - **已知限制**：relayer 单实例（主备 RPO/RTO 待评估）；任务重派重试上限（spec §10.2 限次3）尚未硬性强制，靠调度器自然重派。
 
 ## 已知风险（spec §16）

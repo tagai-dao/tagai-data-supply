@@ -127,14 +127,14 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
 
 async function storeRaw(subtask_id: string, node_id: string, tw: IncomingTweet): Promise<void> {
   await pool.execute(
-    'INSERT INTO `tds_tweet_raw` (subtask_id, node_id, tweet_id, raw_json, promoted) VALUES (?, ?, ?, ?, 0)',
+    'INSERT INTO `bsc_tds_tweet_raw` (subtask_id, node_id, tweet_id, raw_json, promoted) VALUES (?, ?, ?, ?, 0)',
     [subtask_id, node_id, tw.tweet_id, JSON.stringify(tw)],
   );
 }
 
 async function markRawPromoted(tweet_id: string): Promise<void> {
   await pool.execute(
-    'UPDATE `tds_tweet_raw` SET promoted = 1 WHERE tweet_id = ? AND promoted = 0',
+    'UPDATE `bsc_tds_tweet_raw` SET promoted = 1 WHERE tweet_id = ? AND promoted = 0',
     [tweet_id],
   );
 }
@@ -142,7 +142,7 @@ async function markRawPromoted(tweet_id: string): Promise<void> {
 async function bumpMetric(node_id: string, promoted: number, deduped: number, errors: number): Promise<void> {
   // upsert 当日 metric
   await pool.execute(
-    `INSERT INTO \`tds_node_metric\` (node_id, date, fetched_count, deduped_count, error_count)
+    `INSERT INTO \`bsc_tds_node_metric\` (node_id, date, fetched_count, deduped_count, error_count)
      VALUES (?, CURRENT_DATE, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        fetched_count = fetched_count + VALUES(fetched_count),

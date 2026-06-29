@@ -83,7 +83,7 @@ adminRoutes.patch('/subtasks/:id', async (req, res) => {
 // ---- node ----
 adminRoutes.get('/nodes', async (_req, res) => {
   const [rows] = await pool.execute(
-    'SELECT node_id, label, status, timezone, cookie_health, last_heartbeat, created_at FROM `tds_node` ORDER BY created_at DESC',
+    'SELECT node_id, label, status, timezone, cookie_health, last_heartbeat, created_at FROM `bsc_tds_node` ORDER BY created_at DESC',
   );
   res.json({ c: 0, d: rows });
 });
@@ -107,16 +107,16 @@ adminRoutes.post('/nodes/:id/disable', async (req, res) => {
 // ---- 数据状态 ----
 adminRoutes.get('/stats', async (_req, res) => {
   const [nodes] = await pool.execute<any[]>(
-    "SELECT status, COUNT(*) AS cnt FROM `tds_node` GROUP BY status",
+    "SELECT status, COUNT(*) AS cnt FROM `bsc_tds_node` GROUP BY status",
   );
   const [tweets] = await pool.execute<any[]>(
-    'SELECT COUNT(*) AS cnt FROM `tds_tweet_raw`',
+    'SELECT COUNT(*) AS cnt FROM `bsc_tds_tweet_raw`',
   );
   const [promoted] = await pool.execute<any[]>(
-    "SELECT COUNT(*) AS cnt FROM `tds_tweet_raw` WHERE promoted = 1",
+    "SELECT COUNT(*) AS cnt FROM `bsc_tds_tweet_raw` WHERE promoted = 1",
   );
   const [assignments] = await pool.execute<any[]>(
-    "SELECT status, COUNT(*) AS cnt FROM `tds_assignment` GROUP BY status",
+    "SELECT status, COUNT(*) AS cnt FROM `bsc_tds_assignment` GROUP BY status",
   );
   res.json({
     c: 0,

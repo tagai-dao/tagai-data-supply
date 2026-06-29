@@ -41,13 +41,13 @@ export interface AssignmentRow {
 
 export async function createTopic(topic_id: string, name: string, tick: string = NO_TICK_SENTINEL): Promise<void> {
   await pool.execute(
-    'INSERT INTO `tds_topic` (topic_id, name, enabled, tick) VALUES (?, ?, 1, ?)',
+    'INSERT INTO `bsc_tds_topic` (topic_id, name, enabled, tick) VALUES (?, ?, 1, ?)',
     [topic_id, name, tick],
   );
 }
 
 export async function listTopics(): Promise<TopicRow[]> {
-  const [rows] = await pool.execute<any[]>('SELECT * FROM `tds_topic` ORDER BY created_at');
+  const [rows] = await pool.execute<any[]>('SELECT * FROM `bsc_tds_topic` ORDER BY created_at');
   return rows as TopicRow[];
 }
 
@@ -76,7 +76,7 @@ export function validateSubtaskTick(tick: string | undefined | null): string {
 export async function createSubtask(input: CreateSubtaskInput): Promise<void> {
   const tick = validateSubtaskTick(input.tick);
   await pool.execute(
-    `INSERT INTO \`tds_subtask\`
+    `INSERT INTO \`bsc_tds_subtask\`
      (subtask_id, topic_id, type, mode, params, priority, tick, schedule_cron, window_minutes, enabled)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
@@ -95,14 +95,14 @@ export async function createSubtask(input: CreateSubtaskInput): Promise<void> {
 
 export async function listEnabledSubtasks(): Promise<SubtaskRow[]> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT * FROM `tds_subtask` WHERE enabled = 1 ORDER BY priority DESC, created_at",
+    "SELECT * FROM `bsc_tds_subtask` WHERE enabled = 1 ORDER BY priority DESC, created_at",
   );
   return rows.map(normalizeSubtask);
 }
 
 export async function getSubtask(subtask_id: string): Promise<SubtaskRow | null> {
   const [rows] = await pool.execute<any[]>(
-    'SELECT * FROM `tds_subtask` WHERE subtask_id = ? LIMIT 1',
+    'SELECT * FROM `bsc_tds_subtask` WHERE subtask_id = ? LIMIT 1',
     [subtask_id],
   );
   return rows[0] ? normalizeSubtask(rows[0]) : null;
@@ -116,14 +116,14 @@ function normalizeSubtask(r: any): SubtaskRow {
 // 注意：cursor 是 MySQL 保留字，必须反引号
 export async function updateSubtaskCursor(subtask_id: string, cursor: string | null, owner_node: string | null): Promise<void> {
   await pool.execute(
-    'UPDATE `tds_subtask` SET `cursor` = ?, cursor_owner_node = ? WHERE subtask_id = ?',
+    'UPDATE `bsc_tds_subtask` SET `cursor` = ?, cursor_owner_node = ? WHERE subtask_id = ?',
     [cursor, owner_node, subtask_id],
   );
 }
 
 export async function setSubtaskEnabled(subtask_id: string, enabled: boolean): Promise<void> {
   await pool.execute(
-    'UPDATE `tds_subtask` SET enabled = ? WHERE subtask_id = ?',
+    'UPDATE `bsc_tds_subtask` SET enabled = ? WHERE subtask_id = ?',
     [enabled ? 1 : 0, subtask_id],
   );
 }
@@ -132,7 +132,7 @@ export async function setSubtaskEnabled(subtask_id: string, enabled: boolean): P
 
 export async function createAssignment(assignment_id: string, subtask_id: string, node_id: string): Promise<void> {
   await pool.execute(
-    `INSERT INTO \`tds_assignment\` (assignment_id, subtask_id, node_id, status, last_run_at)
+    `INSERT INTO \`bsc_tds_assignment\` (assignment_id, subtask_id, node_id, status, last_run_at)
      VALUES (?, ?, ?, 'assigned', NOW())`,
     [assignment_id, subtask_id, node_id],
   );
@@ -140,7 +140,7 @@ export async function createAssignment(assignment_id: string, subtask_id: string
 
 export async function setAssignmentStatus(assignment_id: string, status: AssignmentRow['status'], summary?: object): Promise<void> {
   await pool.execute(
-    'UPDATE `tds_assignment` SET status = ?, result_summary = ? WHERE assignment_id = ?',
+    'UPDATE `bsc_tds_assignment` SET status = ?, result_summary = ? WHERE assignment_id = ?',
     [status, summary ? JSON.stringify(summary) : null, assignment_id],
   );
 }
@@ -148,7 +148,7 @@ export async function setAssignmentStatus(assignment_id: string, status: Assignm
 // spec §8.1: 节点是否有在执行的任务（单节点串行）
 export async function getNodeActiveAssignment(node_id: string): Promise<AssignmentRow | null> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT * FROM `tds_assignment` WHERE node_id = ? AND status IN ('assigned','running') ORDER BY assigned_at DESC LIMIT 1",
+    "SELECT * FROM `bsc_tds_assignment` WHERE node_id = ? AND status IN ('assigned','running') ORDER BY assigned_at DESC LIMIT 1",
     [node_id],
   );
   return (rows[0] as AssignmentRow) ?? null;
@@ -156,7 +156,7 @@ export async function getNodeActiveAssignment(node_id: string): Promise<Assignme
 
 export async function getAssignmentBySubtaskAndNode(subtask_id: string, node_id: string): Promise<AssignmentRow | null> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT * FROM `tds_assignment` WHERE subtask_id = ? AND node_id = ? AND status IN ('assigned','running') LIMIT 1",
+    "SELECT * FROM `bsc_tds_assignment` WHERE subtask_id = ? AND node_id = ? AND status IN ('assigned','running') LIMIT 1",
     [subtask_id, node_id],
   );
   return (rows[0] as AssignmentRow) ?? null;
@@ -165,7 +165,7 @@ export async function getAssignmentBySubtaskAndNode(subtask_id: string, node_id:
 // spec §8.1: 公平轮转 — 取各 subtask 最近 last_run_at
 export async function getSubtaskLastRunMap(): Promise<Map<string, Date | null>> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT subtask_id, MAX(last_run_at) AS last_run FROM `tds_assignment` GROUP BY subtask_id",
+    "SELECT subtask_id, MAX(last_run_at) AS last_run FROM `bsc_tds_assignment` GROUP BY subtask_id",
   );
   const m = new Map<string, Date | null>();
   for (const r of rows) m.set(r.subtask_id, r.last_run ?? null);

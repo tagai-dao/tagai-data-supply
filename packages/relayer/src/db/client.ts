@@ -75,11 +75,11 @@ export interface InviteRow {
 
 // spec §5.2: 注册校验 status=active AND node_id IS NULL
 export const CONSUME_INVITE_SQL =
-  'SELECT * FROM `tds_invite` WHERE invite_secret_hash = ? AND status = ? FOR UPDATE';
+  'SELECT * FROM `bsc_tds_invite` WHERE invite_secret_hash = ? AND status = ? FOR UPDATE';
 
 export async function createInvite(invite_id: string, invite_secret_hash: string): Promise<void> {
   await pool.execute(
-    'INSERT INTO `tds_invite` (invite_id, invite_secret_hash, status) VALUES (?, ?, "active")',
+    'INSERT INTO `bsc_tds_invite` (invite_id, invite_secret_hash, status) VALUES (?, ?, "active")',
     [invite_id, invite_secret_hash],
   );
 }
@@ -102,7 +102,7 @@ export async function consumeInvite(invite_secret: string): Promise<ConsumeInvit
       return { ok: false };
     }
     await conn.execute(
-      'UPDATE `tds_invite` SET status = "used", used_at = NOW() WHERE invite_id = ?',
+      'UPDATE `bsc_tds_invite` SET status = "used", used_at = NOW() WHERE invite_id = ?',
       [invite.invite_id],
     );
     await conn.commit();
@@ -139,7 +139,7 @@ export interface RegisterNodeInput {
 
 export async function createNode(input: RegisterNodeInput): Promise<void> {
   await pool.execute(
-    `INSERT INTO \`tds_node\` (node_id, token_hash, label, status, timezone, cookie_health, invite_id)
+    `INSERT INTO \`bsc_tds_node\` (node_id, token_hash, label, status, timezone, cookie_health, invite_id)
      VALUES (?, ?, ?, 'offline', ?, 100, ?)`,
     [input.node_id, input.token_hash, input.label ?? null, input.timezone, input.invite_id],
   );
@@ -149,7 +149,7 @@ export async function createNode(input: RegisterNodeInput): Promise<void> {
 export async function findNodeByToken(node_token: string): Promise<NodeRow | null> {
   const h = hashToken(node_token);
   const [rows] = await pool.execute<any[]>(
-    'SELECT * FROM `tds_node` WHERE token_hash = ? LIMIT 1',
+    'SELECT * FROM `bsc_tds_node` WHERE token_hash = ? LIMIT 1',
     [h],
   );
   return (rows[0] as NodeRow) ?? null;
@@ -157,7 +157,7 @@ export async function findNodeByToken(node_token: string): Promise<NodeRow | nul
 
 export async function findNodeById(node_id: string): Promise<NodeRow | null> {
   const [rows] = await pool.execute<any[]>(
-    'SELECT * FROM `tds_node` WHERE node_id = ? LIMIT 1',
+    'SELECT * FROM `bsc_tds_node` WHERE node_id = ? LIMIT 1',
     [node_id],
   );
   return (rows[0] as NodeRow) ?? null;
@@ -168,7 +168,7 @@ export async function setNodeStatus(
   status: NodeRow['status'],
 ): Promise<void> {
   await pool.execute(
-    'UPDATE `tds_node` SET status = ? WHERE node_id = ?',
+    'UPDATE `bsc_tds_node` SET status = ? WHERE node_id = ?',
     [status, node_id],
   );
 }
@@ -178,14 +178,14 @@ export async function updateHeartbeat(
   cookie_status?: string,
 ): Promise<void> {
   await pool.execute(
-    'UPDATE `tds_node` SET last_heartbeat = NOW(), status = "online" WHERE node_id = ?',
+    'UPDATE `bsc_tds_node` SET last_heartbeat = NOW(), status = "online" WHERE node_id = ?',
     [node_id],
   );
 }
 
 export async function listOnlineNodes(): Promise<NodeRow[]> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT * FROM `tds_node` WHERE status = 'online'",
+    "SELECT * FROM `bsc_tds_node` WHERE status = 'online'",
   );
   return rows as NodeRow[];
 }
