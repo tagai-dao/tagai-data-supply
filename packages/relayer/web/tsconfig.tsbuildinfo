@@ -1,0 +1,1 @@
+{"root":["./src/App.vue","./src/api.ts","./src/env.d.ts","./src/main.ts","./src/views/Dashboard.vue","./src/views/Invites.vue","./src/views/Login.vue","./src/views/Nodes.vue","./src/views/Subtasks.vue","./src/views/Topics.vue"],"version":"5.9.3"}

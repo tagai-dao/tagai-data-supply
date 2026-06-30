@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "ts-node src/server/app.ts",
-    "build": "tsc",
+    "build": "tsc && node -e \"require('fs').cpSync('src/admin/public','dist/admin/public',{recursive:true})\"",
+    "build:web": "cd web && yarn install && yarn build",
+    "build:all": "yarn build:web && yarn build",
     "start": "node dist/server/app.js",
     "test": "jest",
     "verify-schema": "ts-node src/db/verify-schema.ts"
