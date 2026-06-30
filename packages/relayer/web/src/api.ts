@@ -38,6 +38,8 @@ export const api = {
   listTopics: () => http.get('/admin/topics').then(unwrap),
   createTopic: (data: { name: string; tick?: string }) =>
     http.post('/admin/topics', data).then(unwrap),
+  updateTopic: (id: string, data: { name?: string; tick?: string; enabled?: boolean }) =>
+    http.patch(`/admin/topics/${id}`, data).then(unwrap),
 
   // subtasks
   listSubtasks: () => http.get('/admin/subtasks').then(unwrap),

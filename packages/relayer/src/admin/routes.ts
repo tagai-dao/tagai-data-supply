@@ -36,6 +36,23 @@ adminRoutes.post('/topics', asyncHandler(async (req, res) => {
   res.json({ c: 0, d: { topic_id, name, tick: tick ?? 'no-tick-of-tiptag' } });
 }));
 
+// 编辑主题（name/tick/enabled，任选字段）
+adminRoutes.patch('/topics/:id', asyncHandler(async (req, res) => {
+  const { name, tick, enabled } = req.body ?? {};
+  const sets: string[] = [];
+  const vals: any[] = [];
+  if (typeof name === 'string' && name.trim()) { sets.push('name = ?'); vals.push(name.trim()); }
+  if (typeof tick === 'string' && tick.trim()) { sets.push('tick = ?'); vals.push(tick.trim()); }
+  if (typeof enabled === 'boolean') { sets.push('enabled = ?'); vals.push(enabled ? 1 : 0); }
+  if (sets.length === 0) {
+    res.status(400).json({ c: 1, m: 'no fields to update' });
+    return;
+  }
+  vals.push(req.params.id);
+  await pool.execute(`UPDATE \`bsc_tds_topic\` SET ${sets.join(', ')} WHERE topic_id = ?`, vals);
+  res.json({ c: 0, d: { topic_id: req.params.id } });
+}));
+
 // ---- subtask ----
 adminRoutes.get('/subtasks', asyncHandler(async (_req, res) => {
   const subtasks = await listEnabledSubtasks();

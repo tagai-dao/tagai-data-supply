@@ -94,8 +94,12 @@ export async function createSubtask(input: CreateSubtaskInput): Promise<void> {
 }
 
 export async function listEnabledSubtasks(): Promise<SubtaskRow[]> {
+  // 联动 topic.enabled：主题禁用时其下子任务也不派发（spec §7 配置驱动）
   const [rows] = await pool.execute<any[]>(
-    "SELECT * FROM `bsc_tds_subtask` WHERE enabled = 1 ORDER BY priority DESC, created_at",
+    `SELECT s.* FROM \`bsc_tds_subtask\` s
+     INNER JOIN \`bsc_tds_topic\` t ON s.topic_id = t.topic_id
+     WHERE s.enabled = 1 AND t.enabled = 1
+     ORDER BY s.priority DESC, s.created_at`,
   );
   return rows.map(normalizeSubtask);
 }
