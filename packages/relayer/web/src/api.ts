@@ -54,7 +54,9 @@ export const api = {
   reclaimNode: (id: string) => http.post(`/admin/nodes/${id}/reclaim`).then(unwrap),
 
   // invites
-  createInvite: () => http.post('/admin/invites').then(unwrap),
+  createInvite: (label?: string) =>
+    http.post('/admin/invites', { label }).then(unwrap),
+  listInvites: () => http.get('/admin/invites').then(unwrap),
 };
 
 export function setToken(token: string) {

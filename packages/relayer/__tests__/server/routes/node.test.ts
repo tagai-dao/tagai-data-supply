@@ -5,6 +5,7 @@ import { app } from '../../../src/server/app';
 jest.mock('../../../src/db/client', () => ({
   consumeInvite: jest.fn(),
   createNode: jest.fn(),
+  linkInviteNode: jest.fn().mockResolvedValue(undefined),
 }));
 // mock tokens: 确定性凭据
 jest.mock('../../../src/auth/tokens', () => ({

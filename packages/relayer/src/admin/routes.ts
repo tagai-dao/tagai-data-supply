@@ -2,7 +2,7 @@
 import { Router, Response } from 'express';
 import { nanoid } from 'nanoid';
 import { issueInvite } from '../auth/tokens';
-import { createInvite, listOnlineNodes, setNodeStatus } from '../db/client';
+import { createInvite, listOnlineNodes, setNodeStatus, listInvites } from '../db/client';
 import { pool } from '../db/pool';
 import {
   createTopic, listTopics, createSubtask, listEnabledSubtasks, setSubtaskEnabled,
@@ -15,11 +15,17 @@ import { asyncHandler } from '../server/middleware/asyncHandler';
 export const adminRoutes = Router();
 
 // ---- invite ----
-adminRoutes.post('/invites', asyncHandler(async (_req, res: Response) => {
+adminRoutes.post('/invites', asyncHandler(async (req, res: Response) => {
+  const { label } = req.body ?? {};
   const i = issueInvite();
-  await createInvite(i.invite_id, i.invite_secret_hash);
-  logger.info({ invite_id: i.invite_id }, 'invite created');
-  res.json({ c: 0, d: { invite_id: i.invite_id, invite_secret: i.invite_secret } });
+  await createInvite(i.invite_id, i.invite_secret_hash, label ?? null);
+  logger.info({ invite_id: i.invite_id, label: label ?? null }, 'invite created');
+  res.json({ c: 0, d: { invite_id: i.invite_id, invite_secret: i.invite_secret, label: label ?? null } });
+}));
+
+adminRoutes.get('/invites', asyncHandler(async (_req, res) => {
+  const invites = await listInvites();
+  res.json({ c: 0, d: invites });
 }));
 
 // ---- topic ----

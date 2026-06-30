@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../../config';
-import { consumeInvite, createNode } from '../../db/client';
+import { consumeInvite, createNode, linkInviteNode } from '../../db/client';
 import { issueNodeCredentials } from '../../auth/tokens';
 import { IpRateLimiter } from '../ratelimit';
 import { logger } from '../../utils/logger';
@@ -53,8 +53,11 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     token_hash: cred.token_hash,
     invite_id: consumed.invite_id,
     timezone,
-    label: label ?? null,
+    // label 优先用节点自报，否则继承邀请码绑定的名字
+    label: label ?? consumed.label ?? null,
   });
+  // 回填 invite.node_id，建立 invite↔node 双向关联
+  await linkInviteNode(consumed.invite_id, cred.node_id);
 
   logger.info({ node_id: cred.node_id, ip }, 'node registered');
   res.json({

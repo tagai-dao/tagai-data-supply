@@ -77,16 +77,42 @@ export interface InviteRow {
 export const CONSUME_INVITE_SQL =
   'SELECT * FROM `bsc_tds_invite` WHERE invite_secret_hash = ? AND status = ? FOR UPDATE';
 
-export async function createInvite(invite_id: string, invite_secret_hash: string): Promise<void> {
+export async function createInvite(invite_id: string, invite_secret_hash: string, label?: string | null): Promise<void> {
   await pool.execute(
-    'INSERT INTO `bsc_tds_invite` (invite_id, invite_secret_hash, status) VALUES (?, ?, "active")',
-    [invite_id, invite_secret_hash],
+    'INSERT INTO `bsc_tds_invite` (invite_id, invite_secret_hash, label, status) VALUES (?, ?, ?, "active")',
+    [invite_id, invite_secret_hash, label ?? null],
+  );
+}
+
+// invite 列表（含 label 与关联 node）
+export interface InviteRow {
+  invite_id: string;
+  label: string | null;
+  node_id: string | null;
+  status: 'active' | 'used' | 'revoked';
+  used_at: Date | null;
+  created_at: Date;
+}
+
+export async function listInvites(): Promise<InviteRow[]> {
+  const [rows] = await pool.execute<any[]>(
+    'SELECT invite_id, label, node_id, status, used_at, created_at FROM `bsc_tds_invite` ORDER BY created_at DESC',
+  );
+  return rows as InviteRow[];
+}
+
+// 回填 invite.node_id，建立 invite↔node 双向关联
+export async function linkInviteNode(invite_id: string, node_id: string): Promise<void> {
+  await pool.execute(
+    'UPDATE `bsc_tds_invite` SET node_id = ? WHERE invite_id = ?',
+    [node_id, invite_id],
   );
 }
 
 export interface ConsumeInviteResult {
   ok: boolean;
   invite_id?: string;
+  label?: string | null;
 }
 
 // spec §10.1: 一次性消费 invite。事务内查 active + 标 used。
@@ -106,7 +132,7 @@ export async function consumeInvite(invite_secret: string): Promise<ConsumeInvit
       [invite.invite_id],
     );
     await conn.commit();
-    return { ok: true, invite_id: invite.invite_id };
+    return { ok: true, invite_id: invite.invite_id, label: invite.label };
   } catch (e) {
     await conn.rollback();
     throw e;

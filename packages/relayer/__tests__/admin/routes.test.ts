@@ -8,6 +8,7 @@ jest.mock('../../src/db/pool', () => ({
 }));
 jest.mock('../../src/db/client', () => ({
   createInvite: jest.fn(),
+  listInvites: jest.fn().mockResolvedValue([]),
   listOnlineNodes: jest.fn().mockResolvedValue([]),
   setNodeStatus: jest.fn().mockResolvedValue(undefined),
 }));

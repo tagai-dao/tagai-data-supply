@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS `bsc_tds_cookie_health_log` (
 CREATE TABLE IF NOT EXISTS `bsc_tds_invite` (
   `invite_id` varchar(64) NOT NULL,
   `invite_secret_hash` varchar(128) NOT NULL,
+  `label` varchar(128) DEFAULT NULL,
   `node_id` varchar(64) DEFAULT NULL,
   `status` enum('active','used','revoked') NOT NULL DEFAULT 'active',
   `used_at` datetime DEFAULT NULL,
