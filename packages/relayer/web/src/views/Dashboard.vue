@@ -3,20 +3,20 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { api } from '../api';
 
 const stats = ref<any>({});
-const loading = ref(false);
+const loading = ref(false); // 仅首次加载显示遮罩，后续静默刷新
 let timer: any;
 
-async function load() {
-  loading.value = true;
+async function load(silent = false) {
+  if (!silent) loading.value = true;
   try {
     stats.value = await api.stats();
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 }
 onMounted(() => {
-  load();
-  timer = setInterval(load, 5000);
+  load();                          // 首次：显示 loading
+  timer = setInterval(() => load(true), 5000);  // 后续：静默刷新
 });
 onUnmounted(() => clearInterval(timer));
 

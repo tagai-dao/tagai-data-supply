@@ -7,15 +7,15 @@ const list = ref<any[]>([]);
 const loading = ref(false);
 let timer: any;
 
-async function load() {
-  loading.value = true;
+async function load(silent = false) {
+  if (!silent) loading.value = true;
   try {
     list.value = (await api.listNodes()) as any[];
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 }
-onMounted(() => { load(); timer = setInterval(load, 5000); });
+onMounted(() => { load(); timer = setInterval(() => load(true), 5000); });
 onUnmounted(() => clearInterval(timer));
 
 const statusType = (s: string) =>
