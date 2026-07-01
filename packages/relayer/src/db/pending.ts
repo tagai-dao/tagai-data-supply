@@ -42,3 +42,22 @@ export async function backupToAllTweets(tweet_id: string, content: string): Prom
     [tweet_id, content],
   ).catch((e: any) => logger.warn({ err: e?.message, tweet_id }, 'backupToAllTweets failed'));
 }
+
+// 查 pending 行（按 status 过滤，分页）
+export async function listPending(status: number | null, limit = 100, offset = 0): Promise<any[]> {
+  const sql = status !== null
+    ? 'SELECT * FROM `bsc_tds_pending_tweet` WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?'
+    : 'SELECT * FROM `bsc_tds_pending_tweet` ORDER BY id DESC LIMIT ? OFFSET ?';
+  const params = status !== null ? [status, limit, offset] : [limit, offset];
+  const [rows] = await pool.query(sql, params);
+  return rows as any[];
+}
+
+// 重试：回 status=0，重置 retry_count=0 + 清 last_error
+export async function retryPending(id: number): Promise<boolean> {
+  const [res] = await pool.execute(
+    "UPDATE `bsc_tds_pending_tweet` SET status = 0, last_error = NULL, retry_count = 0 WHERE id = ? AND status = 3",
+    [id],
+  );
+  return (res as any).affectedRows > 0;
+}

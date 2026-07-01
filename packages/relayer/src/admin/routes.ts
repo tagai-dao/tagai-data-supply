@@ -9,6 +9,7 @@ import {
   validateSubtaskTick, type CreateSubtaskInput,
 } from '../db/tasks';
 import { reclaimNodeAssignments, reEnableNode } from '../health/db';
+import { listPending, retryPending } from '../db/pending';
 import { logger } from '../utils/logger';
 import { asyncHandler } from '../server/middleware/asyncHandler';
 
@@ -151,4 +152,20 @@ adminRoutes.get('/stats', asyncHandler(async (_req, res) => {
       assignments: Object.fromEntries(assignments.map((r: any) => [r.status, r.cnt])),
     },
   });
+}));
+
+// ---- pending 推文处理 ----
+adminRoutes.get('/pending', asyncHandler(async (req, res) => {
+  const s = req.query.status;
+  let status: number | null;
+  if (s === undefined || s === '') status = 3;
+  else if (Number(s) < 0) status = null;
+  else status = Number(s);
+  const rows = await listPending(status, 200);
+  res.json({ c: 0, d: rows });
+}));
+
+adminRoutes.post('/pending/:id/retry', asyncHandler(async (req, res) => {
+  const ok = await retryPending(Number(req.params.id));
+  res.json({ c: 0, d: { id: Number(req.params.id), retried: ok } });
 }));
