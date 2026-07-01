@@ -39,13 +39,14 @@ def test_verify_tagai_account_ok():
     with patch('tagai_data_supply.registration.urllib.request') as m:
         resp = MagicMock()
         resp.read.return_value = json.dumps({
-            'c': 0, 'd': {'ok': True, 'twitter_username': 'alice', 'twitter_id': '111'},
+            'c': 0, 'd': {'ok': True, 'twitter_username': 'alice', 'twitter_id': '111', 'account_type': 0},
         }).encode()
         opener = MagicMock()
         opener.open.return_value.__enter__.return_value = resp
         m.build_opener.return_value = opener
-        d = verify_tagai_account('http://h:7701', 'alice', 0)
+        d = verify_tagai_account('http://h:7701', 'alice')
         assert d['twitter_username'] == 'alice'
+        assert d['account_type'] == 0
 
 
 def test_verify_tagai_account_403_friendly():
@@ -59,5 +60,5 @@ def test_verify_tagai_account_403_friendly():
         m.build_opener.return_value = opener
         m.HTTPError = urllib.error.HTTPError
         with pytest.raises(click.ClickException) as exc:
-            verify_tagai_account('http://h:7701', 'nobody', 0)
+            verify_tagai_account('http://h:7701', 'nobody')
         assert 'Steem' in str(exc.value) or '验证失败' in str(exc.value)

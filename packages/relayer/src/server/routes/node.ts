@@ -17,19 +17,14 @@ export const nodeRoutes = Router();
 
 nodeRoutes.get('/_ping', (_req, res) => res.json({ ok: true }));
 
-// setup 预检：验证收益账号，不消费 invite
+// setup 预检：验证收益账号，不消费 invite（仅需 username，类型由 tagai-api 库记录返回）
 nodeRoutes.post('/verify-account', async (req: Request, res: Response) => {
-  const { tagai_username, tagai_account_type } = req.body ?? {};
-  if (!tagai_username || tagai_account_type === undefined) {
-    res.status(400).json({ c: 1, m: 'tagai_username and tagai_account_type required' });
+  const { tagai_username } = req.body ?? {};
+  if (!tagai_username) {
+    res.status(400).json({ c: 1, m: 'tagai_username required' });
     return;
   }
-  const accountType = Number(tagai_account_type);
-  if (accountType !== 0 && accountType !== 2) {
-    res.status(400).json({ c: 1, m: 'tagai_account_type must be 0 or 2' });
-    return;
-  }
-  const verified = await verifyTagaiAccount(String(tagai_username), accountType);
+  const verified = await verifyTagaiAccount(String(tagai_username));
   if (!verified) {
     res.status(403).json({
       c: 1,
@@ -39,7 +34,12 @@ nodeRoutes.post('/verify-account', async (req: Request, res: Response) => {
   }
   res.json({
     c: 0,
-    d: { ok: true, twitter_id: verified.twitter_id, twitter_username: verified.twitter_username },
+    d: {
+      ok: true,
+      twitter_id: verified.twitter_id,
+      twitter_username: verified.twitter_username,
+      account_type: verified.account_type,
+    },
   });
 });
 
@@ -67,21 +67,17 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  // spec §3.3: 绑定 tagai 收益账号（twitter_username），验证后存 twitter_id
-  if (!tagai_username || tagai_account_type === undefined) {
-    res.status(400).json({ c: 1, m: 'tagai_username and tagai_account_type required' });
+  // spec §3.3: 绑定 tagai 收益账号（twitter_username），验证后存 twitter_id + account_type
+  if (!tagai_username) {
+    res.status(400).json({ c: 1, m: 'tagai_username required' });
     return;
   }
-  const accountType = Number(tagai_account_type);
-  if (accountType !== 0 && accountType !== 2) {
-    res.status(400).json({ c: 1, m: 'tagai_account_type must be 0 or 2' });
-    return;
-  }
-  const verified = await verifyTagaiAccount(String(tagai_username), accountType);
+  const verified = await verifyTagaiAccount(String(tagai_username));
   if (!verified) {
     res.status(403).json({ c: 1, m: 'tagai account not verified (not bound to steem or inactive)' });
     return;
   }
+  const accountType = verified.account_type;
 
   // spec §10.1: 一次性消费 invite（验证通过后再消费，减少无效 invite 消耗）
   const consumed = await consumeInvite(invite_secret);

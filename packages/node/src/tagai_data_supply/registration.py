@@ -31,13 +31,10 @@ def _friendly_verify_error(http_code: int, detail: str) -> str:
     return f"验证失败 (HTTP {http_code})：{detail}"
 
 
-def verify_tagai_account(http_base: str, tagai_username: str, tagai_account_type: int) -> dict:
-    """setup 预检：调用 relayer POST /node/verify-account，不消费 invite。"""
+def verify_tagai_account(http_base: str, tagai_username: str) -> dict:
+    """setup 预检：仅需 username，account_type 由服务端从库记录返回。"""
     url = http_base.rstrip("/") + "/node/verify-account"
-    body = json.dumps({
-        "tagai_username": tagai_username,
-        "tagai_account_type": tagai_account_type,
-    }).encode("utf-8")
+    body = json.dumps({"tagai_username": tagai_username}).encode("utf-8")
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:

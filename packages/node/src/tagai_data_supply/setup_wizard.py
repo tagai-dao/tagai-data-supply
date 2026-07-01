@@ -67,21 +67,21 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
             break
         click.echo("邀请码不能为空。", err=True)
 
-    # 3. 收益账号（验证通过后才进入 cookie 步骤）
+    # 3. 收益账号（输入 username 后后台验证，类型从 TagAI 库读取）
+    acct_type = 0
     while True:
         username = _normalize_username(click.prompt("收益账号 Twitter 用户名（@ 可省略）"))
         if not username:
             click.echo("用户名不能为空。", err=True)
             continue
-        acct_type = click.prompt("账号类型", type=click.Choice(["0", "2"]),
-                                 show_choices=True,
-                                 default="0")
-        click.echo("  0 = 普通 Twitter  2 = TagClaw Agent")
         click.echo("正在验证收益账号（需已在 TagAI 注册并绑定 Steem）...")
         try:
-            info = verify_tagai_account(http_base, username, int(acct_type))
+            info = verify_tagai_account(http_base, username)
+            acct_type = int(info["account_type"])
             verified_name = info.get("twitter_username") or username
-            click.echo(f"✓ 收益账号 @{verified_name} 验证通过")
+            type_label = "TagClaw Agent" if acct_type == 2 else "Twitter"
+            click.echo(f"✓ 收益账号 @{verified_name} 验证通过（{type_label}，已绑 Steem）")
+            username = verified_name
             break
         except click.ClickException as e:
             click.echo(str(e), err=True)
@@ -103,7 +103,6 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
         cred = register_with_relayer(
             http_base, invite_secret, tz,
             tagai_username=username,
-            tagai_account_type=int(acct_type),
         )
     except click.ClickException as e:
         click.echo(str(e), err=True)

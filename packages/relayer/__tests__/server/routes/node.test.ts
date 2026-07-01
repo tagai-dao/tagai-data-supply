@@ -14,7 +14,7 @@ jest.mock('../../../src/auth/tokens', () => ({
   })),
 }));
 jest.mock('../../../src/tagai/client', () => ({
-  verifyTagaiAccount: jest.fn().mockResolvedValue({ twitter_id: '111', twitter_username: 'alice' }),
+  verifyTagaiAccount: jest.fn().mockResolvedValue({ twitter_id: '111', twitter_username: 'alice', account_type: 0 }),
 }));
 
 import { consumeInvite, createNode } from '../../../src/db/client';
@@ -30,31 +30,29 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (verifyTagaiAccount as jest.Mock).mockResolvedValue({ twitter_id: '111', twitter_username: 'alice' });
+  (verifyTagaiAccount as jest.Mock).mockResolvedValue({ twitter_id: '111', twitter_username: 'alice', account_type: 0 });
   registerLimiter.reset();
 });
 
 const GOOD_BODY = {
   invite_secret: 'good', protocol_version: '1', timezone: 'UTC',
-  tagai_username: 'alice', tagai_account_type: 0,
+  tagai_username: 'alice',
 };
 
 describe('POST /node/verify-account', () => {
   it('403 when tagai account not verified', async () => {
     (verifyTagaiAccount as jest.Mock).mockResolvedValueOnce(null);
-    const res = await request(app).post('/node/verify-account').send({
-      tagai_username: 'nobody', tagai_account_type: 0,
-    });
+    const res = await request(app).post('/node/verify-account').send({ tagai_username: 'nobody' });
     expect(res.status).toBe(403);
     expect(consumeInvite).not.toHaveBeenCalled();
   });
 
-  it('200 when verified', async () => {
-    const res = await request(app).post('/node/verify-account').send({
-      tagai_username: 'alice', tagai_account_type: 0,
-    });
+  it('200 when verified with account_type from api', async () => {
+    const res = await request(app).post('/node/verify-account').send({ tagai_username: 'alice' });
     expect(res.status).toBe(200);
     expect(res.body.d.twitter_username).toBe('alice');
+    expect(res.body.d.account_type).toBe(0);
+    expect(verifyTagaiAccount).toHaveBeenCalledWith('alice');
     expect(consumeInvite).not.toHaveBeenCalled();
   });
 });
@@ -76,13 +74,6 @@ describe('POST /node/register (spec §10.1)', () => {
   it('400 when missing tagai_username', async () => {
     const res = await request(app).post('/node/register').send({
       invite_secret: 'good', protocol_version: '1', timezone: 'UTC',
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it('400 when tagai_account_type not 0 or 2', async () => {
-    const res = await request(app).post('/node/register').send({
-      ...GOOD_BODY, tagai_account_type: 5,
     });
     expect(res.status).toBe(400);
   });
@@ -111,7 +102,7 @@ describe('POST /node/register (spec §10.1)', () => {
     expect(res.body.c).toBe(0);
     expect(res.body.d.node_id).toBe('node_test1');
     expect(res.body.d.node_token).toBe('tok_secret123');
-    expect(verifyTagaiAccount).toHaveBeenCalledWith('alice', 0);
+    expect(verifyTagaiAccount).toHaveBeenCalledWith('alice');
     expect(consumeInvite).toHaveBeenCalledWith('good');
     expect(createNode).toHaveBeenCalledWith(expect.objectContaining({
       node_id: 'node_test1', timezone: 'Asia/Shanghai', label: 'n1', invite_id: 'inv_1',

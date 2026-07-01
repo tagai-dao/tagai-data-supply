@@ -18,7 +18,7 @@ from .runtime_store import (
     load_manifest, save_manifest, write_status, read_status, build_status_snapshot,
 )
 from .setup_wizard import run_setup
-from .registration import register_with_relayer, local_timezone as _local_timezone
+from .registration import register_with_relayer, verify_tagai_account, local_timezone as _local_timezone
 from .task_gate import TaskGate
 from .social_simulator import SocialSimulator
 from . import social_state, interaction_pool
@@ -131,18 +131,15 @@ def set_timezone(offset: int):
 @click.option("--http-base", prompt="Relayer HTTP 地址", help="relayer http base")
 @click.option("--invite-secret", prompt="Invite secret", hide_input=True)
 @click.option("--tagai-username", prompt="收益账号 Twitter 用户名（@ 可省略）")
-@click.option("--tagai-account-type", type=click.Choice(['0', '2']), prompt="账号类型 (0=twitter, 2=tagclaw)")
 @click.option("--label", default=None)
-def configure(http_base: str, invite_secret: str, tagai_username: str,
-              tagai_account_type: str, label: str | None):
+def configure(http_base: str, invite_secret: str, tagai_username: str, label: str | None):
     """（进阶）非交互注册。推荐使用 `tagai-node setup`。"""
     click.echo("提示：推荐使用 `tagai-node setup`，会引导填写抓取 cookie。")
     ensure_config_dir()
     tz = _local_timezone()
     username = tagai_username.strip().removeprefix("@")
-    cred = register_with_relayer(http_base, invite_secret, tz, label=label,
-                                 tagai_username=username,
-                                 tagai_account_type=int(tagai_account_type))
+    info = verify_tagai_account(http_base, username)
+    cred = register_with_relayer(http_base, invite_secret, tz, label=label, tagai_username=info.get("twitter_username") or username)
     ws_url = http_base.replace("http://", "ws://").replace("https://", "wss://")
     save_state(NodeConfig(relayer_url=ws_url, node_token=cred["node_token"], timezone=tz))
     click.echo(f"注册成功: node_id={cred['node_id']}。请 `tagai-node login` 后 `run`。")
