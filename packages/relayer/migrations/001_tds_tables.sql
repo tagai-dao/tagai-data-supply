@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS `bsc_tds_assignment` (
   `status` enum('assigned','running','done','failed','reclaimed') NOT NULL DEFAULT 'assigned',
   `last_run_at` datetime DEFAULT NULL,
   `result_summary` json DEFAULT NULL,
+  `accepted_count` int NOT NULL DEFAULT 0,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`assignment_id`),

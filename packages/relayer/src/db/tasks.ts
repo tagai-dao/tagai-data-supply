@@ -35,6 +35,7 @@ export interface AssignmentRow {
   status: 'assigned' | 'running' | 'done' | 'failed' | 'reclaimed';
   last_run_at: Date | null;
   result_summary: any;
+  accepted_count: number;
 }
 
 // ---------- topic ----------
@@ -156,6 +157,23 @@ export async function getNodeActiveAssignment(node_id: string): Promise<Assignme
     [node_id],
   );
   return (rows[0] as AssignmentRow) ?? null;
+}
+
+export async function getAssignmentById(assignment_id: string): Promise<AssignmentRow | null> {
+  const [rows] = await pool.execute<any[]>(
+    'SELECT * FROM `bsc_tds_assignment` WHERE assignment_id = ? LIMIT 1',
+    [assignment_id],
+  );
+  return (rows[0] as AssignmentRow) ?? null;
+}
+
+export async function addAssignmentAcceptedCount(assignment_id: string, delta: number): Promise<number> {
+  await pool.execute(
+    'UPDATE `bsc_tds_assignment` SET accepted_count = accepted_count + ? WHERE assignment_id = ?',
+    [delta, assignment_id],
+  );
+  const row = await getAssignmentById(assignment_id);
+  return row?.accepted_count ?? 0;
 }
 
 export async function getAssignmentBySubtaskAndNode(subtask_id: string, node_id: string): Promise<AssignmentRow | null> {

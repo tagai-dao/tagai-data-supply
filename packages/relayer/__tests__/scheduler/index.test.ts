@@ -65,6 +65,7 @@ describe('Scheduler (spec §8)', () => {
     const msg = send.mock.calls[0][1] as any;
     expect(msg.type).toBe('task_assign');
     expect(msg.subtask_id).toBe('s1');
+    expect(msg.assignment_id).toMatch(/^asg_/);
     expect(msg.params).toEqual({ q: '#x' });
     expect(createAssignment).toHaveBeenCalledTimes(1);
     expect(updateSubtaskCursor).toHaveBeenCalled();

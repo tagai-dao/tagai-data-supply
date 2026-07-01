@@ -3,9 +3,10 @@
   "$id": "task_assign.json",
   "title": "TaskAssign",
   "type": "object",
-  "required": ["type", "subtask_id", "task_type", "params", "mode"],
+  "required": ["type", "assignment_id", "subtask_id", "task_type", "params", "mode"],
   "properties": {
     "type": { "const": "task_assign" },
+    "assignment_id": { "type": "string" },
     "subtask_id": { "type": "string" },
     "task_type": { "type": "string", "enum": ["hashtag", "user_timeline", "keyword", "list"] },
     "params": { "type": "object" },

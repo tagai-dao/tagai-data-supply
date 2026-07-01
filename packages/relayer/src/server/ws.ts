@@ -9,7 +9,8 @@ import {
   updateHeartbeat,
   type NodeRow,
 } from '../db/client';
-import { getAssignmentBySubtaskAndNode } from '../db/tasks';
+import { getAssignmentById, setAssignmentStatus } from '../db/tasks';
+import { gateTaskResult } from '../assignment/gate';
 import { ingestTaskResult } from '../ingestion';
 import { applyCookieEvent, reclaimNodeAssignments } from '../health/db';
 import { PROTOCOL_VERSION } from '@tds/shared';
@@ -164,21 +165,50 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
   });
 }
 
-// spec §4: 处理节点回传 task_result → ingestion
+// spec §4: 处理节点回传 task_result → ingestion（须带 assignment_id，仅派发节点可交）
 async function handleTaskResult(nodeId: string, msg: any): Promise<void> {
   try {
+    const assignmentId = msg.assignment_id;
     const subtaskId = msg.subtask_id;
-    let assignmentId: string | undefined;
-    if (subtaskId) {
-      const asg = await getAssignmentBySubtaskAndNode(subtaskId, nodeId);
-      assignmentId = asg?.assignment_id;
+    const status = msg.status === 'done' ? 'done' : 'failed';
+    const tweets: any[] | undefined = msg.tweets;
+
+    if (!assignmentId) {
+      logger.warn({ node_id: nodeId, subtask_id: subtaskId }, 'task_result rejected: missing assignment_id');
+      return;
     }
+    if (!subtaskId) {
+      logger.warn({ node_id: nodeId, assignment_id: assignmentId }, 'task_result rejected: missing subtask_id');
+      return;
+    }
+
+    const asg = await getAssignmentById(String(assignmentId));
+    const gate = gateTaskResult(asg, nodeId, String(subtaskId), tweets?.length ?? 0, status);
+    if (!gate.ok) {
+      logger.warn({
+        node_id: nodeId,
+        assignment_id: assignmentId,
+        subtask_id: subtaskId,
+        reason: gate.reason,
+      }, 'task_result rejected');
+      return;
+    }
+
+    if (asg!.status === 'assigned') {
+      await setAssignmentStatus(assignmentId, 'running');
+    }
+
+    let batchTweets = tweets;
+    if (batchTweets && gate.maxTweets !== undefined && batchTweets.length > gate.maxTweets) {
+      batchTweets = batchTweets.slice(0, gate.maxTweets);
+    }
+
     await ingestTaskResult({
       subtask_id: subtaskId,
       node_id: nodeId,
       assignment_id: assignmentId,
-      status: msg.status === 'done' ? 'done' : 'failed',
-      tweets: msg.tweets,
+      status,
+      tweets: batchTweets,
       next_cursor: msg.next_cursor,
       error: msg.error,
       cookie_status: msg.cookie_status,

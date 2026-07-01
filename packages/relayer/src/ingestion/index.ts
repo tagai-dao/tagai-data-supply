@@ -1,11 +1,13 @@
 // spec §4/§5/§13: 回传数据处理
-// 流程：校验 → 先查 bsc_tweet → 写 pending 表 + all_tweets 备份 → 更新游标 → metrics
+// 流程：校验 assignment → 先查 bsc_tweet → 写 pending 表 + all_tweets 备份 → 更新游标 → metrics
 
 import { pool } from '../db/pool';
 import { findNodeById } from '../db/client';
-import { getSubtask, updateSubtaskCursor, setAssignmentStatus } from '../db/tasks';
+import {
+  getSubtask, updateSubtaskCursor, setAssignmentStatus, addAssignmentAcceptedCount,
+} from '../db/tasks';
 import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets } from '../db/pending';
-import { NO_TICK_SENTINEL } from '../config/constants';
+import { NO_TICK_SENTINEL, ASSIGNMENT_MAX_TWEETS } from '../config/constants';
 import { logger } from '../utils/logger';
 
 export interface IncomingTweet {
@@ -21,7 +23,7 @@ export interface IncomingTweet {
 export interface TaskResultInput {
   subtask_id: string;
   node_id: string;
-  assignment_id?: string;
+  assignment_id: string;
   status: 'done' | 'failed';
   tweets?: IncomingTweet[];
   next_cursor?: string | null;
@@ -119,20 +121,39 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
     cursorAdvanced = true;
   }
 
-  // 更新 assignment 状态
-  if (input.assignment_id) {
-    await setAssignmentStatus(
-      input.assignment_id,
-      input.status === 'done' ? 'done' : 'failed',
-      { count: received, promoted, deduped, invalid, skipped, error: input.error },
-    );
+  // assignment 累计入库计数（仅 promoted 计入 quota）
+  let acceptedTotal = 0;
+  if (promoted > 0) {
+    acceptedTotal = await addAssignmentAcceptedCount(input.assignment_id, promoted);
   }
+
+  const summary = { count: received, promoted, deduped, invalid, skipped, error: input.error, accepted_total: acceptedTotal };
+  const assignmentDone =
+    input.status === 'failed'
+    || input.status === 'done'
+    || acceptedTotal >= ASSIGNMENT_MAX_TWEETS;
+  await setAssignmentStatus(
+    input.assignment_id,
+    assignmentDone ? (input.status === 'failed' ? 'failed' : 'done') : 'running',
+    summary,
+  );
 
   // metrics（best-effort）；fetched_count 语义：加入 pending 队列数（promoted）
   await bumpMetric(input.node_id, promoted, deduped, input.status === 'failed' ? 1 : 0).catch(() => {});
 
   logger.info(
-    { subtask_id: input.subtask_id, node_id: input.node_id, received, promoted, deduped, invalid, skipped, cursorAdvanced },
+    {
+      subtask_id: input.subtask_id,
+      assignment_id: input.assignment_id,
+      node_id: input.node_id,
+      received,
+      promoted,
+      deduped,
+      invalid,
+      skipped,
+      acceptedTotal,
+      cursorAdvanced,
+    },
     'task_result ingested',
   );
   return { received, promoted, deduped, invalid, skipped, cursorAdvanced };

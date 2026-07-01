@@ -24,6 +24,7 @@ class TaskExecutor:
 
     async def handle(self, task_assign: dict) -> dict:
         subtask_id = task_assign.get("subtask_id")
+        assignment_id = task_assign.get("assignment_id")
         task_type = task_assign.get("task_type")
         params = task_assign.get("params", {}) or {}
         cursor = task_assign.get("cursor")
@@ -33,6 +34,7 @@ class TaskExecutor:
             logger.exception("scrape failed: %s", e)
             return {
                 "type": "task_result",
+                "assignment_id": assignment_id,
                 "subtask_id": subtask_id,
                 "status": "failed",
                 "error": str(e),
@@ -50,6 +52,7 @@ class TaskExecutor:
 
         return {
             "type": "task_result",
+            "assignment_id": assignment_id,
             "subtask_id": subtask_id,
             "status": "done",
             "tweets": fresh,

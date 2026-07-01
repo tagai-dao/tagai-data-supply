@@ -27,6 +27,9 @@ export const NODE_OFFLINE_TIMEOUT_SEC = 60;
 export const RECLAIM_GRACE_PERIOD_SEC = 10;
 export const TASK_MAX_RETRIES = 3;
 
+// 单次 assignment（派发给某 node 的一轮）最多入库 pending 条数
+export const ASSIGNMENT_MAX_TWEETS = 200;
+
 // spec §5.5: 数据保留期（天）
 export const RETENTION = {
   tweet_raw: 7,

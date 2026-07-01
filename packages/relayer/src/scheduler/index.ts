@@ -139,6 +139,7 @@ export class Scheduler {
     const assignmentId = 'asg_' + nanoid(16);
     const msg: any = {
       type: 'task_assign',
+      assignment_id: assignmentId,
       subtask_id: subtask.subtask_id,
       task_type: subtask.type,
       params: subtask.params,

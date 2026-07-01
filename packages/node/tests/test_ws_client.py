@@ -94,7 +94,7 @@ async def test_backoff_grows_and_caps():
 @pytest.mark.asyncio
 async def test_task_handler_invoked(monkeypatch):
     task_msg = json.dumps({
-        "type": "task_assign", "subtask_id": "s1", "task_type": "hashtag",
+        "type": "task_assign", "assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag",
         "params": {}, "mode": "continuous",
     })
     fake = FakeWS([_auth_ack(), task_msg])
@@ -102,7 +102,7 @@ async def test_task_handler_invoked(monkeypatch):
 
     async def on_task(msg):
         received.append(msg)
-        return {"type": "task_result", "subtask_id": msg["subtask_id"], "status": "done"}
+        return {"type": "task_result", "assignment_id": msg["assignment_id"], "subtask_id": msg["subtask_id"], "status": "done"}
 
     client = NodeClient(
         relayer_url="ws://x", node_token="tok",

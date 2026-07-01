@@ -3,9 +3,10 @@
   "$id": "task_result.json",
   "title": "TaskResult",
   "type": "object",
-  "required": ["type", "subtask_id", "status"],
+  "required": ["type", "assignment_id", "subtask_id", "status"],
   "properties": {
     "type": { "const": "task_result" },
+    "assignment_id": { "type": "string" },
     "subtask_id": { "type": "string" },
     "status": { "type": "string", "enum": ["done", "failed"] },
     "tweets": { "type": "array", "items": { "type": "object" } },

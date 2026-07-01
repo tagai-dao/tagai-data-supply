@@ -30,6 +30,7 @@ jest.mock('../../src/db/tasks', () => ({
   getSubtask: jest.fn(),
   updateSubtaskCursor: jest.fn(),
   setAssignmentStatus: jest.fn(),
+  addAssignmentAcceptedCount: jest.fn().mockResolvedValue(1),
 }));
 jest.mock('../../src/db/pending', () => ({
   tweetExistsInBscTweet: jest.fn(),
@@ -57,7 +58,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
     (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(true);
     const r = await ingestTaskResult({
-      subtask_id: 's1', node_id: 'n1', status: 'done',
+      subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
       tweets: [{ tweet_id: '1800000000000000001', twitter_id: '9', content: 'hi', tweet_time: null }],
     });
     expect(r.deduped).toBe(1);
@@ -71,7 +72,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
     (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
     (insertPendingTweet as jest.Mock).mockResolvedValue(false);
     const r = await ingestTaskResult({
-      subtask_id: 's1', node_id: 'n1', status: 'done',
+      subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
       tweets: [{ tweet_id: '1800000000000000004', twitter_id: '9', content: 'hi', tweet_time: null }],
     });
     expect(r.deduped).toBe(1);
@@ -85,7 +86,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
     (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
     (insertPendingTweet as jest.Mock).mockResolvedValue(true);
     const r = await ingestTaskResult({
-      subtask_id: 's1', node_id: 'n1', status: 'done',
+      subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
       tweets: [{ tweet_id: '1800000000000000002', twitter_id: '9', content: 'hi', tweet_time: null }],
     });
     expect(r.promoted).toBe(1);
@@ -100,7 +101,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: null, tagai_account_type: null });
     (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
     const r = await ingestTaskResult({
-      subtask_id: 's1', node_id: 'n1', status: 'done',
+      subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
       tweets: [{ tweet_id: '1800000000000000003', twitter_id: '9', content: 'hi', tweet_time: null }],
     });
     expect(insertPendingTweet).not.toHaveBeenCalled();
