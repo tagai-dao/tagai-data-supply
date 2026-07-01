@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS `bsc_tds_pending_tweet` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `tweet_id` varchar(64) NOT NULL,
+  `twitter_id` varchar(64) DEFAULT NULL,
+  `content` text,
+  `tweet_time` datetime DEFAULT NULL,
+  `node_id` varchar(64) NOT NULL,
+  `tagai_account` varchar(64) NOT NULL,
+  `tagai_account_type` tinyint NOT NULL,
+  `topic_id` varchar(64) DEFAULT NULL,
+  `subtask_id` varchar(64) DEFAULT NULL,
+  `tick` varchar(32) NOT NULL,
+  `status` tinyint NOT NULL DEFAULT 0,
+  `last_error` varchar(255) DEFAULT NULL,
+  `retry_count` int NOT NULL DEFAULT 0,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `update_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_tweet_id` (`tweet_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_tick` (`tick`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='tds 待处理推文（发帖入社区+策展）';
