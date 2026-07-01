@@ -28,14 +28,19 @@ def _local_timezone() -> str:
         return "UTC"
 
 
-def register_with_relayer(http_base: str, invite_secret: str, timezone: str, label: str | None = None) -> dict:
+def register_with_relayer(http_base: str, invite_secret: str, timezone: str,
+                          label: str | None = None,
+                          tagai_account: str | None = None,
+                          tagai_account_type: int | None = None) -> dict:
     """调用 relayer POST /node/register，返回 {node_id, node_token, protocol_version}。spec §10.1。"""
     req_body = RegisterRequest(
         invite_secret=invite_secret,
         protocol_version=PROTOCOL_VERSION,
         timezone=timezone,
         label=label,
-    ).model_dump()
+        tagai_account=tagai_account,
+        tagai_account_type=tagai_account_type,
+    ).model_dump(exclude_none=True)
     url = http_base.rstrip("/") + "/node/register"
     data = json.dumps(req_body).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
@@ -61,13 +66,18 @@ def cli():
 @cli.command()
 @click.option("--http-base", prompt="Relayer HTTP 地址", help="relayer http base，如 http://host:7701")
 @click.option("--invite-secret", prompt="Invite secret", hide_input=True, help="一次性 invite secret")
+@click.option("--tagai-account", prompt="绑定的 tagai 账号 twitter_id", help="已绑 steem 的 tagai 账号")
+@click.option("--tagai-account-type", type=click.Choice(['0', '2']), prompt="账号类型 (0=twitter, 2=tagclaw)")
 @click.option("--label", default=None, help="节点标签")
-def configure(http_base: str, invite_secret: str, label: str | None):
+def configure(http_base: str, invite_secret: str, tagai_account: str,
+              tagai_account_type: str, label: str | None):
     """配置并注册节点（用 invite 换 node_token，存本地）。spec §10.1。"""
     ensure_config_dir()
     tz = _local_timezone()
-    click.echo(f"注册中（timezone={tz}）...")
-    cred = register_with_relayer(http_base, invite_secret, tz, label)
+    click.echo(f"注册中（timezone={tz}, 验证 tagai 账号 {tagai_account}）...")
+    cred = register_with_relayer(http_base, invite_secret, tz, label=label,
+                                 tagai_account=tagai_account,
+                                 tagai_account_type=int(tagai_account_type))
     # http base -> ws url
     ws_url = http_base.replace("http://", "ws://").replace("https://", "wss://")
     cfg = NodeConfig(relayer_url=ws_url, node_token=cred["node_token"], timezone=tz)
