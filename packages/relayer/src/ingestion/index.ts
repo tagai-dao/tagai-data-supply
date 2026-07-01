@@ -1,10 +1,10 @@
 // spec §4/§5/§13: 回传数据处理
-// 流程：raw 留痕 → 校验 → 事务内 INSERT IGNORE bsc_tweet + promote 标记 → 更新游标 → metrics
-// 数据真实性：先入 tds_tweet_raw，过校验门再 promote（spec §13）
+// 流程：校验 → 先查 bsc_tweet → 写 pending 表 + all_tweets 备份 → 更新游标 → metrics
 
 import { pool } from '../db/pool';
-import { insertTweet, type TweetInsert } from '../db/client';
+import { findNodeById } from '../db/client';
 import { getSubtask, updateSubtaskCursor, setAssignmentStatus } from '../db/tasks';
+import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets } from '../db/pending';
 import { NO_TICK_SENTINEL } from '../config/constants';
 import { logger } from '../utils/logger';
 
@@ -57,6 +57,7 @@ export interface IngestResult {
   promoted: number;
   deduped: number;
   invalid: number;
+  skipped: number;
   cursorAdvanced: boolean;
 }
 
@@ -64,38 +65,50 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
   const subtask = await getSubtask(input.subtask_id);
   if (!subtask) {
     logger.warn({ subtask_id: input.subtask_id }, 'task_result for unknown subtask');
-    return { received: 0, promoted: 0, deduped: 0, invalid: 0, cursorAdvanced: false };
+    return { received: 0, promoted: 0, deduped: 0, invalid: 0, skipped: 0, cursorAdvanced: false };
   }
   const tick = subtask.tick || NO_TICK_SENTINEL;
+  // spec §4.3: 按 node_id 取绑定 tagai 账号
+  const node = await findNodeById(input.node_id);
+  const tagaiAccount = node?.tagai_account ?? null;
+  const tagaiAccountType = node?.tagai_account_type ?? null;
 
-  let received = 0, promoted = 0, deduped = 0, invalid = 0;
+  let received = 0, promoted = 0, deduped = 0, invalid = 0, skipped = 0;
 
   if (input.status === 'done' && input.tweets) {
     for (const tw of input.tweets) {
       received++;
-      // spec §13: 校验
-      if (!isValidTweetId(tw.tweet_id)) {
-        invalid++;
+      if (!isValidTweetId(tw.tweet_id)) { invalid++; continue; }
+
+      // spec §4.3: node 无绑定账号 → 跳过（无法策展）
+      if (!tagaiAccount || tagaiAccountType === null) {
+        skipped++;
+        logger.warn({ node_id: input.node_id, tweet_id: tw.tweet_id }, 'node has no tagai account, skip');
         continue;
       }
-      // spec §5.1: raw 留痕
-      await storeRaw(input.subtask_id, input.node_id, tw);
 
-      // spec §13: promote 到 bsc_tweet（INSERT IGNORE 终判去重）
-      const insert: TweetInsert = {
+      // spec §4.2: 先查 bsc_tweet 是否已存在
+      if (await tweetExistsInBscTweet(tw.tweet_id)) { deduped++; continue; }
+
+      // 写 pending 表 + all_tweets 备份
+      const inserted = await insertPendingTweet({
         tweet_id: tw.tweet_id,
         twitter_id: String(tw.twitter_id ?? ''),
         content: String(tw.content ?? ''),
         tweet_time: toTweetTime(tw.tweet_time),
+        node_id: input.node_id,
+        tagai_account: tagaiAccount,
+        tagai_account_type: tagaiAccountType,
+        topic_id: subtask.topic_id ?? null,
+        subtask_id: input.subtask_id,
         tick,
-        tags: tw.tags ?? null,
-        day_number: dayNumber(),
-        video_link: tw.video_link ?? null,
-      };
-      const ok = await insertTweet(insert);
-      if (ok) promoted++;
-      else deduped++;
-      await markRawPromoted(tw.tweet_id);
+      });
+      if (inserted) {
+        promoted++;
+        await backupToAllTweets(tw.tweet_id, String(tw.content ?? ''));
+      } else {
+        deduped++;  // pending UNIQUE 兜底
+      }
     }
   }
 
@@ -111,36 +124,21 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
     await setAssignmentStatus(
       input.assignment_id,
       input.status === 'done' ? 'done' : 'failed',
-      { count: received, promoted, deduped, invalid, error: input.error },
+      { count: received, promoted, deduped, invalid, skipped, error: input.error },
     );
   }
 
-  // metrics（best-effort）
+  // metrics（best-effort）；fetched_count 语义：加入 pending 队列数（promoted）
   await bumpMetric(input.node_id, promoted, deduped, input.status === 'failed' ? 1 : 0).catch(() => {});
 
   logger.info(
-    { subtask_id: input.subtask_id, node_id: input.node_id, received, promoted, deduped, invalid, cursorAdvanced },
+    { subtask_id: input.subtask_id, node_id: input.node_id, received, promoted, deduped, invalid, skipped, cursorAdvanced },
     'task_result ingested',
   );
-  return { received, promoted, deduped, invalid, cursorAdvanced };
-}
-
-async function storeRaw(subtask_id: string, node_id: string, tw: IncomingTweet): Promise<void> {
-  await pool.execute(
-    'INSERT INTO `bsc_tds_tweet_raw` (subtask_id, node_id, tweet_id, raw_json, promoted) VALUES (?, ?, ?, ?, 0)',
-    [subtask_id, node_id, tw.tweet_id, JSON.stringify(tw)],
-  );
-}
-
-async function markRawPromoted(tweet_id: string): Promise<void> {
-  await pool.execute(
-    'UPDATE `bsc_tds_tweet_raw` SET promoted = 1 WHERE tweet_id = ? AND promoted = 0',
-    [tweet_id],
-  );
+  return { received, promoted, deduped, invalid, skipped, cursorAdvanced };
 }
 
 async function bumpMetric(node_id: string, promoted: number, deduped: number, errors: number): Promise<void> {
-  // upsert 当日 metric
   await pool.execute(
     `INSERT INTO \`bsc_tds_node_metric\` (node_id, date, fetched_count, deduped_count, error_count)
      VALUES (?, CURRENT_DATE, ?, ?, ?)

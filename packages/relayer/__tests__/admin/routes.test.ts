@@ -3,7 +3,7 @@ import { app } from '../../src/server/app';
 
 // mock 数据层
 jest.mock('../../src/db/pool', () => ({
-  pool: { execute: jest.fn().mockResolvedValue([[{ status: 'online', cnt: 1 }], []]) },
+  pool: { execute: jest.fn() },
   closePool: jest.fn(),
 }));
 jest.mock('../../src/db/client', () => ({
@@ -38,6 +38,7 @@ jest.mock('../../src/scheduler', () => ({
 import { issueInvite } from '../../src/auth/tokens';
 import { createSubtask, validateSubtaskTick } from '../../src/db/tasks';
 import { reclaimNodeAssignments } from '../../src/health/db';
+import { pool } from '../../src/db/pool';
 
 const ADMIN = 'Bearer test-admin-token';
 
@@ -94,9 +95,15 @@ describe('admin API (spec §12)', () => {
   });
 
   it('GET /admin/stats', async () => {
+    (pool.execute as jest.Mock)
+      .mockResolvedValueOnce([[{ status: 'online', cnt: 1 }], []])
+      .mockResolvedValueOnce([[{ cnt: 5 }], []])
+      .mockResolvedValueOnce([[{ cnt: 3 }], []])
+      .mockResolvedValueOnce([[{ status: 'done', cnt: 2 }], []]);
     const r = await request(app).get('/admin/stats').set('Authorization', ADMIN);
     expect(r.status).toBe(200);
     expect(r.body.d).toHaveProperty('nodes');
-    expect(r.body.d).toHaveProperty('raw_total');
+    expect(r.body.d).toHaveProperty('pending_total');
+    expect(r.body.d).toHaveProperty('pending_done');
   });
 });
