@@ -5,12 +5,13 @@
 ### 前置
 - Node.js >= 18
 - MySQL（复用 tiptag 库 `tiptag`）
-- 独立 DB 用户 `tds_writer`（权限：`bsc_tds_*` 全权 + `bsc_tweet` 仅 INSERT）
+- 独立 DB 用户 `tds_writer`（权限：`bsc_tds_*` 全权 + `bsc_tweet` SELECT(tweet_id) + `all_tweets` INSERT）
 
 ```sql
 CREATE USER 'tds_writer'@'%' IDENTIFIED BY '<pwd>';
 GRANT ALL PRIVILEGES ON tiptag.bsc_tds_* TO 'tds_writer'@'%';
-GRANT INSERT ON tiptag.bsc_tweet TO 'tds_writer'@'%';
+GRANT SELECT (tweet_id) ON tiptag.bsc_tweet TO 'tds_writer'@'%';
+GRANT INSERT ON tiptag.all_tweets TO 'tds_writer'@'%';
 FLUSH PRIVILEGES;
 ```
 
@@ -41,11 +42,48 @@ pm2 save
 环境变量见 `.env.example`。关键：
 - `TDS_ADMIN_TOKEN`：管理 API 固定 token
 - `TDS_PROTOCOL_VERSION`：协议版本（与 node 一致）
+- `TAGAI_API_BASE`：tagai-api 地址（node 注册时验证收益账号 username）
 - `TDS_ALERT_WEBHOOK`：告警 webhook（可选）
 
-## Node 部署（用户自部署，spec §11）
+## tiptag-server：推文入社区 + 策展
 
-### 方式 A：pip 安装
+```bash
+cd tiptag-server
+yarn start-tds-post-curation
+```
+
+轮询 `bsc_tds_pending_tweet`，发帖入社区并策展（不扣 OP/VP）。
+
+## Node 部署（用户自部署）
+
+### 一条命令安装（推荐）
+
+在已克隆仓库内：
+
+```bash
+bash scripts/install-node.sh
+```
+
+或指定远程仓库：
+
+```bash
+TDS_REPO=https://github.com/<org>/tagai-data-supply.git bash scripts/install-node.sh
+```
+
+安装完成后自动进入 `tagai-node setup` 向导（收益账号 + 抓取 cookie 分开填写）。
+
+### 常用命令
+
+| 命令 | 作用 |
+|------|------|
+| `tagai-node setup` | 交互式配置（分步校验） |
+| `tagai-node run` | 常驻抓取 |
+| `tagai-node status` | 人类可读状态 |
+| `tagai-node status --json` | JSON 状态（供 agent 只读） |
+
+本地数据：`~/.tagai_data_supply/`（manifest.json、runtime/status.json、cookie.json）
+
+### 方式 B：pip 安装（开发者）
 ```bash
 git clone <repo> && cd tagai-data-supply/packages/node
 python -m venv .venv && source .venv/bin/activate
@@ -57,13 +95,12 @@ pip install -e ".[dev,scraper]"
 
 ### 配置流程
 ```bash
-# 1. 管理员在 relayer 后台生成 invite，获得 invite_secret
-# 2. 节点配置 + 注册
-tagai-node configure --http-base http://<relayer>:7701 --invite-secret <invite_secret>
-# 3. 登录 cookie（ct0 / auth_token）
-tagai-node login
-# 4. 运行
+# 1. 管理员在 relayer 后台生成 invite
+# 2. 节点安装并 setup（收益账号用 TagAI @用户名，抓取用小号 cookie）
+tagai-node setup
+# 3. 运行
 tagai-node run
+tagai-node status --json   # 只读状态，可自行让 agent 监控
 ```
 
 本地文件 `~/.tagai_data_supply/`（权限 0700）：

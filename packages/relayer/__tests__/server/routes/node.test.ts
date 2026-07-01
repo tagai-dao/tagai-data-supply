@@ -1,13 +1,11 @@
 import request from 'supertest';
 import { app } from '../../../src/server/app';
 
-// mock db
 jest.mock('../../../src/db/client', () => ({
   consumeInvite: jest.fn(),
   createNode: jest.fn(),
   linkInviteNode: jest.fn().mockResolvedValue(undefined),
 }));
-// mock tokens: 确定性凭据
 jest.mock('../../../src/auth/tokens', () => ({
   issueNodeCredentials: jest.fn(() => ({
     node_id: 'node_test1',
@@ -15,9 +13,8 @@ jest.mock('../../../src/auth/tokens', () => ({
     token_hash: 'hash_test1',
   })),
 }));
-// mock tagai 验证客户端
 jest.mock('../../../src/tagai/client', () => ({
-  verifyTagaiAccount: jest.fn().mockResolvedValue(true),
+  verifyTagaiAccount: jest.fn().mockResolvedValue({ twitter_id: '111', twitter_username: 'alice' }),
 }));
 
 import { consumeInvite, createNode } from '../../../src/db/client';
@@ -33,13 +30,13 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (verifyTagaiAccount as jest.Mock).mockResolvedValue(true);
-  registerLimiter.reset();  // 重置 IP 限频，避免用例间累积
+  (verifyTagaiAccount as jest.Mock).mockResolvedValue({ twitter_id: '111', twitter_username: 'alice' });
+  registerLimiter.reset();
 });
 
 const GOOD_BODY = {
   invite_secret: 'good', protocol_version: '1', timezone: 'UTC',
-  tagai_account: '111', tagai_account_type: 0,
+  tagai_username: 'alice', tagai_account_type: 0,
 };
 
 describe('POST /node/register (spec §10.1)', () => {
@@ -56,7 +53,7 @@ describe('POST /node/register (spec §10.1)', () => {
     expect(res.body.m).toMatch(/protocol version mismatch/);
   });
 
-  it('400 when missing tagai_account', async () => {
+  it('400 when missing tagai_username', async () => {
     const res = await request(app).post('/node/register').send({
       invite_secret: 'good', protocol_version: '1', timezone: 'UTC',
     });
@@ -71,10 +68,10 @@ describe('POST /node/register (spec §10.1)', () => {
   });
 
   it('403 when tagai account not verified', async () => {
-    (verifyTagaiAccount as jest.Mock).mockResolvedValueOnce(false);
-    (consumeInvite as jest.Mock).mockResolvedValue({ ok: true, invite_id: 'inv_1' });
+    (verifyTagaiAccount as jest.Mock).mockResolvedValueOnce(null);
     const res = await request(app).post('/node/register').send(GOOD_BODY);
     expect(res.status).toBe(403);
+    expect(consumeInvite).not.toHaveBeenCalled();
     expect(createNode).not.toHaveBeenCalled();
   });
 
@@ -94,8 +91,8 @@ describe('POST /node/register (spec §10.1)', () => {
     expect(res.body.c).toBe(0);
     expect(res.body.d.node_id).toBe('node_test1');
     expect(res.body.d.node_token).toBe('tok_secret123');
+    expect(verifyTagaiAccount).toHaveBeenCalledWith('alice', 0);
     expect(consumeInvite).toHaveBeenCalledWith('good');
-    expect(verifyTagaiAccount).toHaveBeenCalledWith('111', 0);
     expect(createNode).toHaveBeenCalledWith(expect.objectContaining({
       node_id: 'node_test1', timezone: 'Asia/Shanghai', label: 'n1', invite_id: 'inv_1',
       tagai_account: '111', tagai_account_type: 0,

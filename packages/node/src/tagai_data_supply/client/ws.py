@@ -37,6 +37,7 @@ class NodeClient:
         cookie_status: CookieStatus = CookieStatus.UNKNOWN,
         on_task: Optional[Callable[[dict], Awaitable[dict]]] = None,
         ws_factory: Optional[Callable[[str], Awaitable[Any]]] = None,
+        on_auth_change: Optional[Callable[[bool], None]] = None,
     ):
         self.relayer_url = relayer_url
         self.node_token = node_token
@@ -45,6 +46,7 @@ class NodeClient:
         self.on_task = on_task
         # ws_factory 注入便于测试；默认用 websockets.connect
         self._ws_factory = ws_factory
+        self._on_auth_change = on_auth_change
         self._stop = asyncio.Event()
         self.authed = False
 
@@ -88,6 +90,8 @@ class NodeClient:
             await self._serve(ws)
         finally:
             self.authed = False
+            if self._on_auth_change:
+                self._on_auth_change(False)
             try:
                 await ws.close()
             except Exception:
@@ -106,6 +110,8 @@ class NodeClient:
         if not ack.ok:
             raise ConnectionError(f"auth failed: {ack.error}")
         self.authed = True
+        if self._on_auth_change:
+            self._on_auth_change(True)
         logger.info("ws authed as node %s", ack.node_id)
 
     async def _serve(self, ws) -> None:

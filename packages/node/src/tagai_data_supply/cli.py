@@ -1,118 +1,131 @@
-"""一键化 CLI：configure / login / run。spec §11。"""
+"""一键化 CLI：setup / run / status。spec §11。"""
 from __future__ import annotations
 import asyncio
 import json
 import urllib.request
 import urllib.error
-from pathlib import Path
 
 import click
 
 from .config import NodeConfig, ensure_config_dir
 from .cookie import save_cookie, load_cookie
 from .node_state import save_state, load_state
-from .client.protocol import PROTOCOL_VERSION, RegisterRequest, RegisterResponse, CookieStatus
+from .client.protocol import CookieStatus
 from .client.ws import NodeClient
 from .runtime.executor import TaskExecutor
 from .scraper.twikit_scraper import TwikitScraper
+from .runtime_store import (
+    load_manifest, write_status, read_status, build_status_snapshot,
+)
+from .setup_wizard import run_setup
+from .registration import register_with_relayer, local_timezone as _local_timezone
 
 
-def _local_timezone() -> str:
-    try:
-        import time
-        import zoneinfo  # py3.9+
-        local = time.localtime().tm_zone
-        # 退化处理：取不到就用 UTC
-        return local if local else "UTC"
-    except Exception:
-        return "UTC"
-
-
-def register_with_relayer(http_base: str, invite_secret: str, timezone: str,
-                          label: str | None = None,
-                          tagai_account: str | None = None,
-                          tagai_account_type: int | None = None) -> dict:
-    """调用 relayer POST /node/register，返回 {node_id, node_token, protocol_version}。spec §10.1。"""
-    req_body = RegisterRequest(
-        invite_secret=invite_secret,
-        protocol_version=PROTOCOL_VERSION,
-        timezone=timezone,
-        label=label,
-        tagai_account=tagai_account,
-        tagai_account_type=tagai_account_type,
-    ).model_dump(exclude_none=True)
-    url = http_base.rstrip("/") + "/node/register"
-    data = json.dumps(req_body).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-    # 禁用系统代理（macOS urllib 会读系统代理设置导致本地请求被代理 502）
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-    try:
-        with opener.open(req, timeout=15) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        detail = e.read().decode("utf-8", errors="replace")
-        raise click.ClickException(f"register failed: HTTP {e.code} {detail}")
-    parsed = RegisterResponse.model_validate(body)
-    if parsed.c != 0 or not parsed.d:
-        raise click.ClickException(f"register failed: {parsed.m}")
-    return parsed.d
-
-
-@click.group()
-def cli():
-    """tagai-data-supply 节点 CLI。"""
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx):
+    """tagai-data-supply 抓取节点。"""
+    if ctx.invoked_subcommand is None:
+        if load_state() and load_manifest():
+            click.echo("节点已配置。使用 `tagai-node status` 查看状态，`tagai-node run` 启动。")
+        else:
+            click.echo("尚未配置，正在进入 setup 向导…")
+            ctx.invoke(setup)
 
 
 @cli.command()
-@click.option("--http-base", prompt="Relayer HTTP 地址", help="relayer http base，如 http://host:7701")
-@click.option("--invite-secret", prompt="Invite secret", hide_input=True, help="一次性 invite secret")
-@click.option("--tagai-account", prompt="绑定的 tagai 账号 twitter_id", help="已绑 steem 的 tagai 账号")
+@click.option("--http-base", default=None, help="Relayer HTTP 地址")
+@click.option("--invite-secret", default=None, hide_input=True)
+@click.option("--run/--no-run", "run_after", default=False, help="配置完成后立即运行")
+def setup(http_base: str | None, invite_secret: str | None, run_after: bool):
+    """交互式配置：验证通过后注册并保存 cookie。"""
+    run_setup(http_base=http_base, invite_secret=invite_secret, run_after=run_after)
+
+
+@cli.command()
+@click.option("--json", "as_json", is_flag=True, help="JSON 输出（供 agent 只读）")
+def status(as_json: bool):
+    """查看节点状态（只读，不含监控）。"""
+    manifest = load_manifest()
+    cfg = load_state()
+    ck = load_cookie()
+    snap = build_status_snapshot(
+        phase=read_status().get("phase", "stopped" if cfg else "not_configured"),
+        manifest=manifest,
+        cookie_configured=bool(ck),
+        relayer_connected=read_status().get("relayer_connected", False),
+    )
+    snap.update({k: v for k, v in read_status().items() if k not in snap})
+    if as_json:
+        click.echo(json.dumps(snap, ensure_ascii=False, indent=2))
+        return
+    if not cfg:
+        click.echo("未配置。运行 `tagai-node setup`。")
+        return
+    click.echo(f"节点 ID:     {snap.get('node_id') or '-'}")
+    click.echo(f"状态:        {snap.get('phase')}")
+    click.echo(f"Relayer:     {snap.get('relayer_http') or '-'}")
+    click.echo(f"收益账号:    @{snap.get('tagai_username') or '-'}")
+    click.echo(f"Cookie:      {'已配置' if snap.get('cookie_configured') else '未配置'}")
+    click.echo(f"WS 已连接:   {'是' if snap.get('relayer_connected') else '否'}")
+
+
+@cli.command()
+@click.option("--http-base", prompt="Relayer HTTP 地址", help="relayer http base")
+@click.option("--invite-secret", prompt="Invite secret", hide_input=True)
+@click.option("--tagai-username", prompt="收益账号 Twitter 用户名（@ 可省略）")
 @click.option("--tagai-account-type", type=click.Choice(['0', '2']), prompt="账号类型 (0=twitter, 2=tagclaw)")
-@click.option("--label", default=None, help="节点标签")
-def configure(http_base: str, invite_secret: str, tagai_account: str,
+@click.option("--label", default=None)
+def configure(http_base: str, invite_secret: str, tagai_username: str,
               tagai_account_type: str, label: str | None):
-    """配置并注册节点（用 invite 换 node_token，存本地）。spec §10.1。"""
+    """（进阶）非交互注册。推荐使用 `tagai-node setup`。"""
+    click.echo("提示：推荐使用 `tagai-node setup`，会引导填写抓取 cookie。")
     ensure_config_dir()
     tz = _local_timezone()
-    click.echo(f"注册中（timezone={tz}, 验证 tagai 账号 {tagai_account}）...")
+    username = tagai_username.strip().removeprefix("@")
     cred = register_with_relayer(http_base, invite_secret, tz, label=label,
-                                 tagai_account=tagai_account,
+                                 tagai_username=username,
                                  tagai_account_type=int(tagai_account_type))
-    # http base -> ws url
     ws_url = http_base.replace("http://", "ws://").replace("https://", "wss://")
-    cfg = NodeConfig(relayer_url=ws_url, node_token=cred["node_token"], timezone=tz)
-    save_state(cfg)
-    click.echo(f"注册成功: node_id={cred['node_id']}")
-    click.echo(f"状态已保存。运行 `tagai-node run` 开始抓取。")
+    save_state(NodeConfig(relayer_url=ws_url, node_token=cred["node_token"], timezone=tz))
+    click.echo(f"注册成功: node_id={cred['node_id']}。请 `tagai-node login` 后 `run`。")
 
 
 @cli.command()
 @click.option("--ct0", prompt="ct0", hide_input=True)
 @click.option("--auth-token", prompt="auth_token", hide_input=True)
 def login(ct0: str, auth_token: str):
-    """交互式输入 cookie（ct0 / auth_token），存本地。spec §11。"""
+    """填写抓取账号 cookie（建议用小号，与收益账号分开）。"""
     ensure_config_dir()
     save_cookie(ct0, auth_token)
-    click.echo("cookie 已保存（权限 0600）。")
+    write_status(build_status_snapshot(phase="stopped", cookie_configured=True))
+    click.echo("抓取 cookie 已保存（权限 0600）。")
 
 
 @cli.command()
 def run():
-    """常驻运行：WS 连接 → 鉴权 → 心跳 → 领任务 → 抓取 → 回传。spec §11。"""
+    """常驻运行：WS 连接 → 领任务 → 抓取 → 回传。"""
     cfg = load_state()
     if not cfg or not cfg.node_token:
-        raise click.ClickException("未注册，请先运行 `tagai-node configure`")
+        raise click.ClickException("未注册，请先运行 `tagai-node setup`")
     ck = load_cookie()
-    cookie_status = CookieStatus.OK if ck else CookieStatus.UNKNOWN
     if not ck:
-        click.echo("警告：未检测到 cookie，请运行 `tagai-node login`（当前仅待命）")
+        raise click.ClickException("未配置抓取 cookie，请运行 `tagai-node setup` 或 `tagai-node login`")
 
-    # 建抓取器 + 执行器（spec §2/P2）
-    on_task = None
-    if ck:
-        scraper = TwikitScraper(ct0=ck["ct0"], auth_token=ck["auth_token"])
-        executor = TaskExecutor(scraper)
-        on_task = _make_handler(executor)
+    cookie_status = CookieStatus.OK
+    scraper = TwikitScraper(ct0=ck["ct0"], auth_token=ck["auth_token"])
+    executor = TaskExecutor(scraper)
+    on_task = _make_handler(executor)
+
+    manifest = load_manifest()
+
+    def _on_auth(connected: bool) -> None:
+        write_status(build_status_snapshot(
+            phase="running" if connected else "starting",
+            manifest=manifest,
+            cookie_configured=True,
+            relayer_connected=connected,
+        ))
 
     client = NodeClient(
         relayer_url=cfg.relayer_url,
@@ -120,18 +133,38 @@ def run():
         timezone=cfg.timezone,
         cookie_status=cookie_status,
         on_task=on_task,
+        on_auth_change=_on_auth,
     )
+
+    async def _run_with_status():
+        write_status(build_status_snapshot(
+            phase="starting", manifest=manifest, cookie_configured=True, relayer_connected=False,
+        ))
+        try:
+            await client.run()
+        finally:
+            write_status(build_status_snapshot(
+                phase="stopped", manifest=manifest, cookie_configured=True,
+                relayer_connected=client.authed,
+            ))
+
     click.echo(f"运行中（relayer={cfg.relayer_url}, tz={cfg.timezone}）")
     try:
-        asyncio.run(client.run())
+        asyncio.run(_run_with_status())
     except KeyboardInterrupt:
         click.echo("停止中...")
         client.stop()
+        write_status(build_status_snapshot(
+            phase="stopped", manifest=manifest, cookie_configured=True, relayer_connected=False,
+        ))
 
 
 def _make_handler(executor: TaskExecutor):
     async def handler(task: dict) -> dict:
-        return await executor.handle(task)
+        write_status({"current_subtask_id": task.get("subtask_id"), "current_assignment_id": task.get("assignment_id")})
+        result = await executor.handle(task)
+        write_status({"last_task_status": result.get("status")})
+        return result
     return handler
 
 

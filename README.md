@@ -59,14 +59,27 @@ pm2 start ecosystem.config.cjs
 
 需要 Python ≥ 3.10。
 
+**一条命令安装（推荐）：**
+
+```bash
+# 在已克隆仓库内
+bash scripts/install-node.sh
+
+# 或指定远程仓库
+TDS_REPO=https://github.com/<org>/tagai-data-supply.git bash scripts/install-node.sh
+```
+
+安装后自动进入 `tagai-node setup` 向导（收益账号 @用户名 + 抓取用小号 cookie，分开配置）。
+
+**开发者手动安装：**
+
 ```bash
 cd packages/node
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[scraper]"
+tagai-node setup
 ```
-
-也可以从 Release 页面下载对应平台的预编译二进制，免去 Python 环境。
 
 ## 使用
 
@@ -100,14 +113,16 @@ curl -X POST http://<relayer>/admin/subtasks \
 抓取者拿到邀请码后，在自己的机器上：
 
 ```bash
-tagai-node configure --http-base http://<relayer-host>:<port> --invite-secret <邀请码>
-tagai-node login       # 交互式输入推特 cookie（ct0 / auth_token）
+tagai-node setup       # 交互式：relayer 地址、邀请码、收益 @用户名、抓取 cookie
 tagai-node run         # 常驻运行：连接 Relayer，领任务，抓取，回传
+tagai-node status      # 查看状态
+tagai-node status --json   # JSON 状态（供 agent 只读）
 ```
 
 本地文件存放在 `~/.tagai_data_supply/`（权限 0700）：
+- `manifest.json` — 节点注册凭据与 relayer 地址
+- `runtime/status.json` — 运行状态快照
 - `cookie.json` — 推特 cookie（权限 0600，仅本机可读）
-- `node_state.json` — 注册凭据
 
 ### 4. 查看状态
 

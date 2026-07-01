@@ -26,7 +26,7 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  const { invite_secret, protocol_version, timezone, label, tagai_account, tagai_account_type } = req.body ?? {};
+  const { invite_secret, protocol_version, timezone, label, tagai_username, tagai_account_type } = req.body ?? {};
   if (!invite_secret || !protocol_version || !timezone) {
     res.status(400).json({ c: 1, m: 'missing fields' });
     return;
@@ -41,9 +41,9 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  // spec §3.3: 绑定 tagai 账号必填且需验证（已开通 steem）
-  if (!tagai_account || tagai_account_type === undefined) {
-    res.status(400).json({ c: 1, m: 'tagai_account and tagai_account_type required' });
+  // spec §3.3: 绑定 tagai 收益账号（twitter_username），验证后存 twitter_id
+  if (!tagai_username || tagai_account_type === undefined) {
+    res.status(400).json({ c: 1, m: 'tagai_username and tagai_account_type required' });
     return;
   }
   const accountType = Number(tagai_account_type);
@@ -51,13 +51,13 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     res.status(400).json({ c: 1, m: 'tagai_account_type must be 0 or 2' });
     return;
   }
-  const verified = await verifyTagaiAccount(String(tagai_account), accountType);
+  const verified = await verifyTagaiAccount(String(tagai_username), accountType);
   if (!verified) {
     res.status(403).json({ c: 1, m: 'tagai account not verified (not bound to steem or inactive)' });
     return;
   }
 
-  // spec §10.1: 一次性消费 invite
+  // spec §10.1: 一次性消费 invite（验证通过后再消费，减少无效 invite 消耗）
   const consumed = await consumeInvite(invite_secret);
   if (!consumed.ok || !consumed.invite_id) {
     res.status(403).json({ c: 1, m: 'invalid or used invite' });
@@ -72,13 +72,13 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     timezone,
     // label 优先用节点自报，否则继承邀请码绑定的名字
     label: label ?? consumed.label ?? null,
-    tagai_account: String(tagai_account),
+    tagai_account: verified.twitter_id,
     tagai_account_type: accountType,
   });
   // 回填 invite.node_id，建立 invite↔node 双向关联
   await linkInviteNode(consumed.invite_id, cred.node_id);
 
-  logger.info({ node_id: cred.node_id, ip }, 'node registered');
+  logger.info({ node_id: cred.node_id, ip, tagai_username: verified.twitter_username }, 'node registered');
   res.json({
     c: 0,
     d: {

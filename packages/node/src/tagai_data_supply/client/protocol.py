@@ -51,7 +51,7 @@ class RegisterRequest(BaseModel):
     protocol_version: str
     timezone: str
     label: Optional[str] = None
-    tagai_account: Optional[str] = None
+    tagai_username: Optional[str] = None
     tagai_account_type: Optional[int] = None
 
 
