@@ -2,12 +2,13 @@ import { Router, Request, Response } from 'express';
 import { config } from '../../config';
 import { consumeInvite, createNode, linkInviteNode } from '../../db/client';
 import { issueNodeCredentials } from '../../auth/tokens';
+import { verifyTagaiAccount } from '../../tagai/client';
 import { IpRateLimiter } from '../ratelimit';
 import { logger } from '../../utils/logger';
 import { PROTOCOL_VERSION } from '@tds/shared';
 
 // spec §10.1: 注册按 IP 限频（默认 5 次/10 分钟）
-const registerLimiter = new IpRateLimiter(
+export const registerLimiter = new IpRateLimiter(
   Number(process.env.TDS_REGISTER_MAX_PER_IP ?? 5),
   Number(process.env.TDS_REGISTER_WINDOW_MS ?? 10 * 60 * 1000),
 );
@@ -25,7 +26,7 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  const { invite_secret, protocol_version, timezone, label } = req.body ?? {};
+  const { invite_secret, protocol_version, timezone, label, tagai_account, tagai_account_type } = req.body ?? {};
   if (!invite_secret || !protocol_version || !timezone) {
     res.status(400).json({ c: 1, m: 'missing fields' });
     return;
@@ -37,6 +38,22 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
       c: 1,
       m: `protocol version mismatch: server=${config.protocolVersion}, node=${protocol_version}`,
     });
+    return;
+  }
+
+  // spec §3.3: 绑定 tagai 账号必填且需验证（已开通 steem）
+  if (!tagai_account || tagai_account_type === undefined) {
+    res.status(400).json({ c: 1, m: 'tagai_account and tagai_account_type required' });
+    return;
+  }
+  const accountType = Number(tagai_account_type);
+  if (accountType !== 0 && accountType !== 2) {
+    res.status(400).json({ c: 1, m: 'tagai_account_type must be 0 or 2' });
+    return;
+  }
+  const verified = await verifyTagaiAccount(String(tagai_account), accountType);
+  if (!verified) {
+    res.status(403).json({ c: 1, m: 'tagai account not verified (not bound to steem or inactive)' });
     return;
   }
 
@@ -55,6 +72,8 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
     timezone,
     // label 优先用节点自报，否则继承邀请码绑定的名字
     label: label ?? consumed.label ?? null,
+    tagai_account: String(tagai_account),
+    tagai_account_type: accountType,
   });
   // 回填 invite.node_id，建立 invite↔node 双向关联
   await linkInviteNode(consumed.invite_id, cred.node_id);

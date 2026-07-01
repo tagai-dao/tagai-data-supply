@@ -19,4 +19,5 @@ export const config = {
   adminToken: required('TDS_ADMIN_TOKEN'),
   protocolVersion: process.env.TDS_PROTOCOL_VERSION ?? '1',
   logLevel: process.env.LOG_LEVEL ?? 'info',
+  tagaiApiBase: process.env.TAGAI_API_BASE ?? 'http://127.0.0.1:3001',
 };

@@ -151,6 +151,8 @@ export interface NodeRow {
   timezone: string;
   last_heartbeat: Date | null;
   cookie_health: number;
+  tagai_account: string | null;
+  tagai_account_type: number | null;
   invite_id: string | null;
   created_at: Date;
 }
@@ -161,13 +163,16 @@ export interface RegisterNodeInput {
   invite_id: string;
   timezone: string;
   label?: string | null;
+  tagai_account?: string | null;
+  tagai_account_type?: number | null;
 }
 
 export async function createNode(input: RegisterNodeInput): Promise<void> {
   await pool.execute(
-    `INSERT INTO \`bsc_tds_node\` (node_id, token_hash, label, status, timezone, cookie_health, invite_id)
-     VALUES (?, ?, ?, 'offline', ?, 100, ?)`,
-    [input.node_id, input.token_hash, input.label ?? null, input.timezone, input.invite_id],
+    `INSERT INTO \`bsc_tds_node\` (node_id, token_hash, label, status, timezone, cookie_health, tagai_account, tagai_account_type, invite_id)
+     VALUES (?, ?, ?, 'offline', ?, 100, ?, ?, ?)`,
+    [input.node_id, input.token_hash, input.label ?? null, input.timezone,
+     input.tagai_account ?? null, input.tagai_account_type ?? null, input.invite_id],
   );
 }
 
