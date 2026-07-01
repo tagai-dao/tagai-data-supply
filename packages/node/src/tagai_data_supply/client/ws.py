@@ -38,6 +38,7 @@ class NodeClient:
         on_task: Optional[Callable[[dict], Awaitable[dict]]] = None,
         ws_factory: Optional[Callable[[str], Awaitable[Any]]] = None,
         on_auth_change: Optional[Callable[[bool], None]] = None,
+        task_gate: Optional[Any] = None,
     ):
         self.relayer_url = relayer_url
         self.node_token = node_token
@@ -47,6 +48,7 @@ class NodeClient:
         # ws_factory 注入便于测试；默认用 websockets.connect
         self._ws_factory = ws_factory
         self._on_auth_change = on_auth_change
+        self._task_gate = task_gate
         self._stop = asyncio.Event()
         self.authed = False
 
@@ -139,9 +141,26 @@ class NodeClient:
         if t == MessageType.PING.value:
             await ws.send(json.dumps({"type": MessageType.PONG.value}))
         elif t == MessageType.TASK_ASSIGN.value and self.on_task:
-            result = await self.on_task(msg)
-            if result:
-                await ws.send(json.dumps(result))
+            ok, reason = (True, None)
+            if self._task_gate is not None:
+                ok, reason = self._task_gate.check_accept()
+            if not ok:
+                await ws.send(json.dumps({
+                    "type": MessageType.TASK_DECLINE.value,
+                    "assignment_id": msg.get("assignment_id"),
+                    "subtask_id": msg.get("subtask_id"),
+                    "reason": reason or "busy",
+                }))
+                return
+            if self._task_gate is not None:
+                self._task_gate.set_busy(True)
+            try:
+                result = await self.on_task(msg)
+                if result:
+                    await ws.send(json.dumps(result))
+            finally:
+                if self._task_gate is not None:
+                    self._task_gate.set_busy(False)
         elif t == MessageType.TASK_CANCEL.value:
             logger.info("task cancelled: %s", msg.get("subtask_id"))
         else:

@@ -17,9 +17,9 @@ export const COOKIE_COOLDOWN_MINUTES = 15;
 // spec §8.3: 串行/并行切换阈值
 export const SERIAL_NODE_THRESHOLD = 2;
 
-// spec §8.3: 节奏控制
+// spec §8.3: 节奏控制（Relayer 派发间隔，Node 侧另有更严格门禁）
 export const DISPATCH_MIN_INTERVAL_SEC = 30;
-export const DISPATCH_MAX_INTERVAL_SEC = 90;
+export const DISPATCH_MAX_INTERVAL_SEC = 30;
 
 // spec §8.5: 心跳与回收
 export const HEARTBEAT_PING_INTERVAL_SEC = 30;

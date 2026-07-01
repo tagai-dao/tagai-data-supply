@@ -13,6 +13,7 @@ import { getAssignmentById, setAssignmentStatus } from '../db/tasks';
 import { gateTaskResult } from '../assignment/gate';
 import { ingestTaskResult } from '../ingestion';
 import { applyCookieEvent, reclaimNodeAssignments } from '../health/db';
+import { redispatchSubtask } from '../scheduler/redispatch';
 import { PROTOCOL_VERSION } from '@tds/shared';
 import {
   HEARTBEAT_PING_INTERVAL_SEC,
@@ -125,6 +126,9 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
       case 'task_result':
         await handleTaskResult(nodeId!, msg);
         break;
+      case 'task_decline':
+        await handleTaskDecline(nodeId!, msg);
+        break;
       case 'cookie_status':
         // P5 cookie 健康处理
         logger.debug({ node_id: nodeId, cookie_status: msg.cookie_status }, 'cookie_status');
@@ -162,6 +166,26 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
 
   ws.on('error', (err) => {
     logger.warn({ err: err.message }, 'ws error');
+  });
+}
+
+// spec §4: 处理节点拒绝 task_assign → 静默回收并重派（不扣 health）
+async function handleTaskDecline(nodeId: string, msg: any): Promise<void> {
+  const assignmentId = msg.assignment_id;
+  const subtaskId = msg.subtask_id;
+  const reason = msg.reason ?? 'policy';
+  if (!assignmentId || !subtaskId) {
+    logger.debug({ node_id: nodeId }, 'task_decline ignored: missing ids');
+    return;
+  }
+  const asg = await getAssignmentById(String(assignmentId));
+  if (!asg || asg.node_id !== nodeId || asg.status !== 'assigned') {
+    return;
+  }
+  await setAssignmentStatus(String(assignmentId), 'declined', { decline_reason: reason });
+  logger.debug({ node_id: nodeId, assignment_id: assignmentId, subtask_id: subtaskId, reason }, 'task_decline');
+  await redispatchSubtask(String(subtaskId), [nodeId]).catch((e) => {
+    logger.warn(e, 'redispatch after decline failed');
   });
 }
 

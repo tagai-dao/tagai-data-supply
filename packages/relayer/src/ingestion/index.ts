@@ -5,6 +5,7 @@ import { pool } from '../db/pool';
 import { findNodeById } from '../db/client';
 import {
   getSubtask, updateSubtaskCursor, setAssignmentStatus, addAssignmentAcceptedCount,
+  updateSubtaskWatermark,
 } from '../db/tasks';
 import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets } from '../db/pending';
 import { NO_TICK_SENTINEL, ASSIGNMENT_MAX_TWEETS } from '../config/constants';
@@ -119,6 +120,20 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
   if (input.status === 'done' && input.next_cursor) {
     await updateSubtaskCursor(input.subtask_id, String(input.next_cursor), input.node_id);
     cursorAdvanced = true;
+  }
+
+  // watermark：用本批有效 tweet 中最大的 tweet_id 推进 subtask 水位
+  if (input.status === 'done' && input.tweets?.length) {
+    let maxId: string | null = null;
+    for (const tw of input.tweets) {
+      if (!isValidTweetId(tw.tweet_id)) continue;
+      if (!maxId || BigInt(tw.tweet_id) > BigInt(maxId)) {
+        maxId = tw.tweet_id;
+      }
+    }
+    if (maxId) {
+      await updateSubtaskWatermark(input.subtask_id, maxId);
+    }
   }
 
   // assignment 累计入库计数（仅 promoted 计入 quota）

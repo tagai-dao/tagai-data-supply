@@ -22,6 +22,7 @@ class Manifest:
     tagai_username: str = ""
     tagai_account_type: int = 0
     timezone: str = "UTC"
+    tz_offset: int = 8  # UTC 偏移，东八区 = 8
     configured_at: str = ""
 
 
@@ -46,7 +47,9 @@ def load_manifest() -> Optional[Manifest]:
         return None
     try:
         data = json.loads(MANIFEST_FILE.read_text())
-        return Manifest(**{k: data[k] for k in Manifest.__dataclass_fields__ if k in data})
+        fields = Manifest.__dataclass_fields__
+        kwargs = {k: data.get(k, fields[k].default) for k in fields}
+        return Manifest(**kwargs)
     except (json.JSONDecodeError, OSError, TypeError):
         return None
 
@@ -85,6 +88,7 @@ def build_status_snapshot(*, phase: str, manifest: Optional[Manifest] = None,
         "relayer_http": m.relayer_http if m else None,
         "tagai_username": m.tagai_username if m else None,
         "tagai_account_type": m.tagai_account_type if m else None,
+        "tz_offset": m.tz_offset if m else None,
         "cookie_configured": cookie_configured,
         "relayer_connected": relayer_connected,
     }

@@ -30,5 +30,6 @@ def test_message_type_enum_complete():
     types = {t.value for t in MessageType}
     assert types == {
         "hello", "auth_ack", "heartbeat", "ping", "pong",
-        "task_assign", "task_cancel", "task_result", "cookie_status", "unregister",
+        "task_assign", "task_cancel", "task_result", "task_decline",
+        "cookie_status", "unregister",
     }

@@ -17,6 +17,7 @@ class MessageType(str, Enum):
     TASK_ASSIGN = "task_assign"
     TASK_CANCEL = "task_cancel"
     TASK_RESULT = "task_result"
+    TASK_DECLINE = "task_decline"
     COOKIE_STATUS = "cookie_status"
     UNREGISTER = "unregister"
 

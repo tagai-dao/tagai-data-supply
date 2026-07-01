@@ -19,6 +19,7 @@ export interface SubtaskRow {
   params: any;
   cursor: string | null;
   cursor_owner_node: string | null;
+  watermark_tweet_id: string | null;
   schedule_cron: string | null;
   window_minutes: number | null;
   priority: number;
@@ -32,7 +33,7 @@ export interface AssignmentRow {
   subtask_id: string;
   node_id: string;
   assigned_at: Date;
-  status: 'assigned' | 'running' | 'done' | 'failed' | 'reclaimed';
+  status: 'assigned' | 'running' | 'done' | 'failed' | 'reclaimed' | 'declined';
   last_run_at: Date | null;
   result_summary: any;
   accepted_count: number;
@@ -123,6 +124,18 @@ export async function updateSubtaskCursor(subtask_id: string, cursor: string | n
   await pool.execute(
     'UPDATE `bsc_tds_subtask` SET `cursor` = ?, cursor_owner_node = ? WHERE subtask_id = ?',
     [cursor, owner_node, subtask_id],
+  );
+}
+
+/** 更新 subtask watermark（仅当新 tweet_id 更大时推进） */
+export async function updateSubtaskWatermark(subtask_id: string, tweet_id: string): Promise<void> {
+  if (!tweet_id || !/^\d{15,20}$/.test(tweet_id)) return;
+  await pool.execute(
+    `UPDATE \`bsc_tds_subtask\`
+     SET watermark_tweet_id = ?
+     WHERE subtask_id = ?
+       AND (watermark_tweet_id IS NULL OR CAST(watermark_tweet_id AS UNSIGNED) < CAST(? AS UNSIGNED))`,
+    [tweet_id, subtask_id, tweet_id],
   );
 }
 

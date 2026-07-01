@@ -14,6 +14,7 @@ import { listOnlineNodes } from '../db/client';
 import { registry } from '../server/connections';
 import { rankSubtasks, type SelectableSubtask } from './selector';
 import { candidateNodes, selectNode, dispatchDelaySec, type DispatchableNode } from './dispatcher';
+import { buildTaskAssignMsg } from './redispatch';
 import {
   SERIAL_NODE_THRESHOLD,
   DISPATCH_MIN_INTERVAL_SEC,
@@ -110,7 +111,7 @@ export class Scheduler {
         // 从候选移除（本轮不再派给它）
         const idx = candidates.findIndex((c) => c.node_id === free.node_id);
         if (idx >= 0) candidates.splice(idx, 1);
-        // spec §8.3: 串行模式下，每次派发后施加随机间隔
+        // spec §8.3: 每次派发后固定间隔 30s（Node 侧另有更严格门禁）
         if (serialMode) {
           const delay = dispatchDelaySec(DISPATCH_MIN_INTERVAL_SEC, DISPATCH_MAX_INTERVAL_SEC);
           await this.deps.sleep(delay * 1000);
@@ -137,20 +138,7 @@ export class Scheduler {
 
   private async assignAndDispatch(subtask: SubtaskRow, node: DispatchableNode): Promise<boolean> {
     const assignmentId = 'asg_' + nanoid(16);
-    const msg: any = {
-      type: 'task_assign',
-      assignment_id: assignmentId,
-      subtask_id: subtask.subtask_id,
-      task_type: subtask.type,
-      params: subtask.params,
-      mode: subtask.mode,
-    };
-    if (subtask.mode === 'continuous' && subtask.cursor) {
-      msg.cursor = subtask.cursor;
-    }
-    if (subtask.mode === 'round' && subtask.window_minutes) {
-      msg.round_window = { minutes: subtask.window_minutes };
-    }
+    const msg = buildTaskAssignMsg(subtask, assignmentId);
 
     const sent = this.deps.send(node.node_id, msg);
     if (!sent) {

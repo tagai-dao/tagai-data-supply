@@ -37,6 +37,19 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
     click.echo("  · 【收益账号】= 您在 TagAI 上已绑 Steem 的账号，用于接收节点策展/挖矿收益")
     click.echo("  · 【抓取账号】= 仅用于 Twitter 抓取的 cookie，建议用小号，与收益账号分开\n")
 
+    click.echo("  · 【静默时段】本地 0:00–8:00 不接收任务，由 Node 时区偏移控制\n")
+
+    # 时区偏移（Node 自主管理，Relayer 不参与）
+    while True:
+        raw = click.prompt("时区 UTC 偏移（东八区填 8）", default="8")
+        try:
+            tz_offset = int(str(raw).strip())
+            if -12 <= tz_offset <= 14:
+                break
+        except ValueError:
+            pass
+        click.echo("请输入 -12 到 14 之间的整数。", err=True)
+
     # 1. Relayer
     while True:
         base = http_base or click.prompt("Relayer HTTP 地址（如 http://host:7701）")
@@ -98,6 +111,7 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
         tagai_username=username,
         tagai_account_type=int(acct_type),
         timezone=tz,
+        tz_offset=tz_offset,
         configured_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
     ))
     write_status(build_status_snapshot(

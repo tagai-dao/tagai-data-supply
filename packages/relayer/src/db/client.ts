@@ -151,6 +151,7 @@ export interface NodeRow {
   timezone: string;
   last_heartbeat: Date | null;
   cookie_health: number;
+  weight: number;
   tagai_account: string | null;
   tagai_account_type: number | null;
   invite_id: string | null;
@@ -169,8 +170,8 @@ export interface RegisterNodeInput {
 
 export async function createNode(input: RegisterNodeInput): Promise<void> {
   await pool.execute(
-    `INSERT INTO \`bsc_tds_node\` (node_id, token_hash, label, status, timezone, cookie_health, tagai_account, tagai_account_type, invite_id)
-     VALUES (?, ?, ?, 'offline', ?, 100, ?, ?, ?)`,
+    `INSERT INTO \`bsc_tds_node\` (node_id, token_hash, label, status, timezone, cookie_health, weight, tagai_account, tagai_account_type, invite_id)
+     VALUES (?, ?, ?, 'offline', ?, 100, 5, ?, ?, ?)`,
     [input.node_id, input.token_hash, input.label ?? null, input.timezone,
      input.tagai_account ?? null, input.tagai_account_type ?? null, input.invite_id],
   );
@@ -212,6 +213,11 @@ export async function updateHeartbeat(
     'UPDATE `bsc_tds_node` SET last_heartbeat = NOW(), status = "online" WHERE node_id = ?',
     [node_id],
   );
+}
+
+export async function updateNodeWeight(node_id: string, weight: number): Promise<void> {
+  const w = Math.max(1, Math.min(10, Math.round(weight)));
+  await pool.execute('UPDATE `bsc_tds_node` SET weight = ? WHERE node_id = ?', [w, node_id]);
 }
 
 export async function listOnlineNodes(): Promise<NodeRow[]> {

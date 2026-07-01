@@ -15,10 +15,11 @@ from .client.ws import NodeClient
 from .runtime.executor import TaskExecutor
 from .scraper.twikit_scraper import TwikitScraper
 from .runtime_store import (
-    load_manifest, write_status, read_status, build_status_snapshot,
+    load_manifest, save_manifest, write_status, read_status, build_status_snapshot,
 )
 from .setup_wizard import run_setup
 from .registration import register_with_relayer, local_timezone as _local_timezone
+from .task_gate import TaskGate
 
 
 @click.group(invoke_without_command=True)
@@ -56,6 +57,9 @@ def status(as_json: bool):
         relayer_connected=read_status().get("relayer_connected", False),
     )
     snap.update({k: v for k, v in read_status().items() if k not in snap})
+    if manifest:
+        gate = TaskGate(tz_offset=manifest.tz_offset)
+        snap.update(gate.status_snapshot())
     if as_json:
         click.echo(json.dumps(snap, ensure_ascii=False, indent=2))
         return
@@ -68,6 +72,30 @@ def status(as_json: bool):
     click.echo(f"收益账号:    @{snap.get('tagai_username') or '-'}")
     click.echo(f"Cookie:      {'已配置' if snap.get('cookie_configured') else '未配置'}")
     click.echo(f"WS 已连接:   {'是' if snap.get('relayer_connected') else '否'}")
+    off = snap.get("tz_offset")
+    if off is not None:
+        sign = "+" if int(off) >= 0 else ""
+        click.echo(f"时区偏移:    UTC{sign}{off}")
+    else:
+        click.echo("时区偏移:    -")
+    click.echo(f"静默时段:    {'是 (0:00-8:00 不抓取)' if snap.get('in_quiet_hours') else '否'}")
+    click.echo(f"今日已抓:    {snap.get('daily_tweet_count', 0)}/{snap.get('daily_tweet_limit', 3000)}")
+    if snap.get('next_accept_after'):
+        click.echo(f"下次可接:    {snap.get('next_accept_after')}")
+
+
+@cli.command("set-timezone")
+@click.option("--offset", type=int, required=True, help="UTC 偏移，东八区填 8")
+def set_timezone(offset: int):
+    """设置 Node 本地时区偏移（用于静默时段 0:00-8:00）。"""
+    manifest = load_manifest()
+    if not manifest:
+        raise click.ClickException("未配置，请先运行 `tagai-node setup`")
+    if offset < -12 or offset > 14:
+        raise click.ClickException("offset 应在 -12 到 14 之间")
+    manifest.tz_offset = offset
+    save_manifest(manifest)
+    click.echo(f"时区已更新为 UTC{offset:+d}（本地 0:00-8:00 不接收任务）")
 
 
 @cli.command()
@@ -118,6 +146,9 @@ def run():
     on_task = _make_handler(executor)
 
     manifest = load_manifest()
+    tz_offset = manifest.tz_offset if manifest else 8
+    gate = TaskGate(tz_offset=tz_offset)
+    on_task = _make_handler(executor, gate)
 
     def _on_auth(connected: bool) -> None:
         write_status(build_status_snapshot(
@@ -134,6 +165,7 @@ def run():
         cookie_status=cookie_status,
         on_task=on_task,
         on_auth_change=_on_auth,
+        task_gate=gate,
     )
 
     async def _run_with_status():
@@ -148,7 +180,7 @@ def run():
                 relayer_connected=client.authed,
             ))
 
-    click.echo(f"运行中（relayer={cfg.relayer_url}, tz={cfg.timezone}）")
+    click.echo(f"运行中（relayer={cfg.relayer_url}, tz_offset=UTC{tz_offset:+d}）")
     try:
         asyncio.run(_run_with_status())
     except KeyboardInterrupt:
@@ -159,11 +191,13 @@ def run():
         ))
 
 
-def _make_handler(executor: TaskExecutor):
+def _make_handler(executor: TaskExecutor, gate: TaskGate):
     async def handler(task: dict) -> dict:
         write_status({"current_subtask_id": task.get("subtask_id"), "current_assignment_id": task.get("assignment_id")})
         result = await executor.handle(task)
-        write_status({"last_task_status": result.get("status")})
+        raw = int(result.pop("_tweets_fetched_raw", 0))
+        gate.on_task_completed(raw)
+        write_status({"last_task_status": result.get("status"), "pages_fetched": result.get("pages_fetched")})
         return result
     return handler
 

@@ -12,9 +12,10 @@ export interface DispatchableNode extends NodeRow {
 // spec §8.2: 计算节点权重
 export function nodeWeight(n: DispatchableNode): number {
   const health = Math.max(0, n.cookie_health);
+  const adminWeight = Math.max(1, Math.min(10, n.weight ?? 5));
   const tzAffinity = 1 / (1 + (n.tz_recent_count ?? 0));
   const loadFactor = 1 / (1 + (n.recent_load ?? 0));
-  return health * tzAffinity * loadFactor;
+  return adminWeight * health * tzAffinity * loadFactor;
 }
 
 // spec §8.2: 候选过滤

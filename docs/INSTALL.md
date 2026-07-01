@@ -18,6 +18,8 @@ FLUSH PRIVILEGES;
 ### 建表
 ```bash
 mysql -u tds_writer -p tiptag < packages/relayer/migrations/001_tds_tables.sql
+# 增量迁移（按序号执行至最新）
+mysql -u tds_writer -p tiptag < packages/relayer/migrations/007_anti_ban_policy.sql
 ```
 
 ### 核对线上 bsc_tweet schema（spec §5.1 Critical）
@@ -80,8 +82,21 @@ TDS_REPO=https://github.com/<org>/tagai-data-supply.git bash scripts/install-nod
 | `tagai-node run` | 常驻抓取 |
 | `tagai-node status` | 人类可读状态 |
 | `tagai-node status --json` | JSON 状态（供 agent 只读） |
+| `tagai-node set-timezone --offset 8` | 修改本地时区偏移（静默 0:00–8:00） |
 
-本地数据：`~/.tagai_data_supply/`（manifest.json、runtime/status.json、cookie.json）
+**Node 防封号策略（Node 自主执行，Relayer 不干预时区）：**
+
+| 策略 | 值 |
+|------|-----|
+| 任务完成后冷却 | 随机 **3–30 分钟** 后才接受下一任务 |
+| 本地静默时段 | **0:00–8:00**（按 `tz_offset`，setup 时设置，如东八区填 `8`） |
+| 单次任务翻页 | 最多 **3 页**，页间 **3 秒** |
+| 每日抓取上限 | **3000 条**（API 返回条数累计） |
+| watermark | Relayer 按 subtask 存储，翻到已抓记录即停 |
+
+Node 拒绝任务时发 `task_decline`，Relayer **静默换人**（不扣 health）。
+
+本地数据：`~/.tagai_data_supply/`（manifest.json、runtime/status.json、runtime/scheduler_state.json、cookie.json）
 
 ### 方式 B：pip 安装（开发者）
 ```bash

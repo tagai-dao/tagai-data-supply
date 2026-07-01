@@ -3,7 +3,8 @@ import { Scheduler, SchedulerDeps } from '../../src/scheduler/index';
 function mkSubtask(id: string, mode: 'continuous' | 'round' = 'continuous', cursor: string | null = null) {
   return {
     subtask_id: id, topic_id: 't', type: 'hashtag', mode,
-    params: { q: '#x' }, cursor, cursor_owner_node: null, schedule_cron: null,
+    params: { q: '#x' }, cursor, cursor_owner_node: null, watermark_tweet_id: null,
+    schedule_cron: null,
     window_minutes: mode === 'round' ? 30 : null, priority: 5, tick: 'SPACEX', enabled: 1, created_at: new Date(0),
   } as any;
 }
@@ -11,7 +12,7 @@ function mkSubtask(id: string, mode: 'continuous' | 'round' = 'continuous', curs
 function mkNode(id: string, health = 100) {
   return {
     node_id: id, token_hash: 'h', label: null, status: 'online', timezone: 'UTC',
-    last_heartbeat: null, cookie_health: health, invite_id: null, created_at: new Date(0),
+    last_heartbeat: null, cookie_health: health, weight: 5, invite_id: null, created_at: new Date(0),
   } as any;
 }
 

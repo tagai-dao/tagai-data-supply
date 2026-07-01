@@ -12,6 +12,7 @@
     "params": { "type": "object" },
     "mode": { "type": "string", "enum": ["continuous", "round"] },
     "cursor": { "type": "string" },
+    "watermark_tweet_id": { "type": "string" },
     "round_window": { "type": "object" }
   },
   "additionalProperties": false

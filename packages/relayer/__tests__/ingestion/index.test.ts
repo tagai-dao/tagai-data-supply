@@ -29,6 +29,7 @@ jest.mock('../../src/db/client', () => ({
 jest.mock('../../src/db/tasks', () => ({
   getSubtask: jest.fn(),
   updateSubtaskCursor: jest.fn(),
+  updateSubtaskWatermark: jest.fn(),
   setAssignmentStatus: jest.fn(),
   addAssignmentAcceptedCount: jest.fn().mockResolvedValue(1),
 }));

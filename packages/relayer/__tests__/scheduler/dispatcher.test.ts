@@ -29,6 +29,12 @@ describe('dispatcher (spec §8.2/§8.3)', () => {
     expect(w2).toBeLessThan(w1);
   });
 
+  it('nodeWeight: higher admin weight → higher weight', () => {
+    const w1 = nodeWeight(mkNode('n', { weight: 3, cookie_health: 100 }));
+    const w2 = nodeWeight(mkNode('n', { weight: 9, cookie_health: 100 }));
+    expect(w2).toBeGreaterThan(w1);
+  });
+
   it('nodeWeight: same tz concentration → lower weight (错峰)', () => {
     const w1 = nodeWeight(mkNode('n', { tz_recent_count: 0 }));
     const w2 = nodeWeight(mkNode('n', { tz_recent_count: 5 }));
@@ -70,9 +76,7 @@ describe('dispatcher (spec §8.2/§8.3)', () => {
     expect(aCount).toBeGreaterThan(60);
   });
 
-  it('dispatchDelaySec within [min, max)', () => {
-    const d = dispatchDelaySec(30, 90, () => 0.5);
-    expect(d).toBeCloseTo(60, 1);
-    expect(dispatchDelaySec(30, 90, () => 0)).toBeCloseTo(30, 1);
+  it('dispatchDelaySec fixed 30s interval', () => {
+    expect(dispatchDelaySec(30, 30, () => 0.5)).toBeCloseTo(30, 1);
   });
 });

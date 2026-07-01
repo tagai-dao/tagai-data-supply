@@ -2,7 +2,7 @@
 import { Router, Response } from 'express';
 import { nanoid } from 'nanoid';
 import { issueInvite } from '../auth/tokens';
-import { createInvite, listOnlineNodes, setNodeStatus, listInvites } from '../db/client';
+import { createInvite, listOnlineNodes, setNodeStatus, listInvites, updateNodeWeight } from '../db/client';
 import { pool } from '../db/pool';
 import {
   createTopic, listTopics, createSubtask, listEnabledSubtasks, setSubtaskEnabled,
@@ -108,9 +108,19 @@ adminRoutes.patch('/subtasks/:id', asyncHandler(async (req, res) => {
 // ---- node ----
 adminRoutes.get('/nodes', asyncHandler(async (_req, res) => {
   const [rows] = await pool.execute(
-    'SELECT node_id, label, status, timezone, cookie_health, last_heartbeat, created_at FROM `bsc_tds_node` ORDER BY created_at DESC',
+    'SELECT node_id, label, status, timezone, cookie_health, weight, last_heartbeat, created_at FROM `bsc_tds_node` ORDER BY created_at DESC',
   );
   res.json({ c: 0, d: rows });
+}));
+
+adminRoutes.patch('/nodes/:id', asyncHandler(async (req, res) => {
+  const { weight } = req.body ?? {};
+  if (weight === undefined || typeof weight !== 'number') {
+    res.status(400).json({ c: 1, m: 'weight (number 1-10) required' });
+    return;
+  }
+  await updateNodeWeight(req.params.id, weight);
+  res.json({ c: 0, d: { node_id: req.params.id, weight: Math.max(1, Math.min(10, Math.round(weight))) } });
 }));
 
 adminRoutes.post('/nodes/:id/reclaim', asyncHandler(async (req, res) => {

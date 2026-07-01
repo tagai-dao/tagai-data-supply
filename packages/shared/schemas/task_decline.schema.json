@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "task_decline.json",
+  "title": "TaskDecline",
+  "type": "object",
+  "required": ["type", "assignment_id", "subtask_id", "reason"],
+  "properties": {
+    "type": { "const": "task_decline" },
+    "assignment_id": { "type": "string" },
+    "subtask_id": { "type": "string" },
+    "reason": {
+      "type": "string",
+      "enum": ["quiet_hours", "min_interval", "daily_quota", "busy"]
+    }
+  },
+  "additionalProperties": false
+}
