@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS `bsc_tds_node` (
   `timezone` varchar(64) NOT NULL DEFAULT 'UTC',
   `last_heartbeat` datetime DEFAULT NULL,
   `cookie_health` int NOT NULL DEFAULT 100,
+  `tagai_account` varchar(64) DEFAULT NULL,
+  `tagai_account_type` tinyint DEFAULT NULL,
   `invite_id` varchar(64) DEFAULT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
