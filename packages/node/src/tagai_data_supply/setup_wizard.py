@@ -5,7 +5,7 @@ import urllib.request
 
 import click
 
-from .registration import register_with_relayer, local_timezone as _local_timezone
+from .registration import register_with_relayer, verify_tagai_account, local_timezone as _local_timezone
 from .config import ensure_config_dir
 from .cookie import save_cookie
 from .node_state import save_state, load_state
@@ -67,16 +67,25 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
             break
         click.echo("邀请码不能为空。", err=True)
 
-    # 3. 收益账号
+    # 3. 收益账号（验证通过后才进入 cookie 步骤）
     while True:
         username = _normalize_username(click.prompt("收益账号 Twitter 用户名（@ 可省略）"))
-        if username:
+        if not username:
+            click.echo("用户名不能为空。", err=True)
+            continue
+        acct_type = click.prompt("账号类型", type=click.Choice(["0", "2"]),
+                                 show_choices=True,
+                                 default="0")
+        click.echo("  0 = 普通 Twitter  2 = TagClaw Agent")
+        click.echo("正在验证收益账号（需已在 TagAI 注册并绑定 Steem）...")
+        try:
+            info = verify_tagai_account(http_base, username, int(acct_type))
+            verified_name = info.get("twitter_username") or username
+            click.echo(f"✓ 收益账号 @{verified_name} 验证通过")
             break
-        click.echo("用户名不能为空。", err=True)
-    acct_type = click.prompt("账号类型", type=click.Choice(["0", "2"]),
-                             show_choices=True,
-                             default="0")
-    click.echo("  0 = 普通 Twitter  2 = TagClaw Agent")
+        except click.ClickException as e:
+            click.echo(str(e), err=True)
+            click.echo("请重新输入收益账号。\n", err=True)
 
     # 4. 抓取 cookie
     click.echo("\n【抓取账号 cookie】")

@@ -39,6 +39,26 @@ const GOOD_BODY = {
   tagai_username: 'alice', tagai_account_type: 0,
 };
 
+describe('POST /node/verify-account', () => {
+  it('403 when tagai account not verified', async () => {
+    (verifyTagaiAccount as jest.Mock).mockResolvedValueOnce(null);
+    const res = await request(app).post('/node/verify-account').send({
+      tagai_username: 'nobody', tagai_account_type: 0,
+    });
+    expect(res.status).toBe(403);
+    expect(consumeInvite).not.toHaveBeenCalled();
+  });
+
+  it('200 when verified', async () => {
+    const res = await request(app).post('/node/verify-account').send({
+      tagai_username: 'alice', tagai_account_type: 0,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.d.twitter_username).toBe('alice');
+    expect(consumeInvite).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /node/register (spec §10.1)', () => {
   it('400 on missing fields', async () => {
     const res = await request(app).post('/node/register').send({ invite_secret: 'x' });

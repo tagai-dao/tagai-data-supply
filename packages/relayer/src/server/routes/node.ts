@@ -17,6 +17,32 @@ export const nodeRoutes = Router();
 
 nodeRoutes.get('/_ping', (_req, res) => res.json({ ok: true }));
 
+// setup 预检：验证收益账号，不消费 invite
+nodeRoutes.post('/verify-account', async (req: Request, res: Response) => {
+  const { tagai_username, tagai_account_type } = req.body ?? {};
+  if (!tagai_username || tagai_account_type === undefined) {
+    res.status(400).json({ c: 1, m: 'tagai_username and tagai_account_type required' });
+    return;
+  }
+  const accountType = Number(tagai_account_type);
+  if (accountType !== 0 && accountType !== 2) {
+    res.status(400).json({ c: 1, m: 'tagai_account_type must be 0 or 2' });
+    return;
+  }
+  const verified = await verifyTagaiAccount(String(tagai_username), accountType);
+  if (!verified) {
+    res.status(403).json({
+      c: 1,
+      m: 'tagai account not verified: user not found, steem not bound, or tagclaw inactive',
+    });
+    return;
+  }
+  res.json({
+    c: 0,
+    d: { ok: true, twitter_id: verified.twitter_id, twitter_username: verified.twitter_username },
+  });
+});
+
 // spec §10.1: 节点注册
 nodeRoutes.post('/register', async (req: Request, res: Response) => {
   const ip = (req.ip || req.socket.remoteAddress || 'unknown').replace(/^::ffff:/, '');
