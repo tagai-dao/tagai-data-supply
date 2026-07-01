@@ -49,4 +49,5 @@ tests/test_social_sim.py
 tests/test_task_gate.py
 tests/test_tweet_time.py
 tests/test_twikit_compat.py
+tests/test_twikit_pack.py
 tests/test_ws_client.py
