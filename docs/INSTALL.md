@@ -96,7 +96,14 @@ TDS_REPO=https://github.com/<org>/tagai-data-supply.git bash scripts/install-nod
 
 Node 拒绝任务时发 `task_decline`，Relayer **静默换人**（不扣 health）。
 
-本地数据：`~/.tagai_data_supply/`（manifest.json、runtime/status.json、runtime/scheduler_state.json、cookie.json）
+**养号模拟（默认开启，`tagai-node social --disable` 可关）：**
+
+| 行为 | 规则 |
+|------|------|
+| 发帖 | 间隔 **30 小时**，内容从抓取池随机摘句，白天 **8:00–22:00** 随机发；失败跳过等下一轮 |
+| 点赞 | 每天 **1–5** 次，白天随机时间；50% 任务池 / 50% Home 时间线 |
+
+本地数据：`~/.tagai_data_supply/`（manifest.json、runtime/status.json、runtime/scheduler_state.json、runtime/social_state.json、runtime/interaction_pool.json、cookie.json）
 
 ### 方式 B：pip 安装（开发者）
 ```bash

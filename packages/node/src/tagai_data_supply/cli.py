@@ -20,6 +20,8 @@ from .runtime_store import (
 from .setup_wizard import run_setup
 from .registration import register_with_relayer, local_timezone as _local_timezone
 from .task_gate import TaskGate
+from .social_simulator import SocialSimulator
+from . import social_state, interaction_pool
 
 
 @click.group(invoke_without_command=True)
@@ -60,6 +62,10 @@ def status(as_json: bool):
     if manifest:
         gate = TaskGate(tz_offset=manifest.tz_offset)
         snap.update(gate.status_snapshot())
+        snap["social_sim_enabled"] = bool(manifest.social_sim_enabled)
+        if manifest.social_sim_enabled:
+            snap.update(social_state.status_snapshot(manifest.tz_offset))
+            snap["social_pool_size"] = interaction_pool.pool_size()
     if as_json:
         click.echo(json.dumps(snap, ensure_ascii=False, indent=2))
         return
@@ -82,6 +88,29 @@ def status(as_json: bool):
     click.echo(f"今日已抓:    {snap.get('daily_tweet_count', 0)}/{snap.get('daily_tweet_limit', 3000)}")
     if snap.get('next_accept_after'):
         click.echo(f"下次可接:    {snap.get('next_accept_after')}")
+    if snap.get("social_sim_enabled"):
+        click.echo(f"养号模拟:    开 | 池 {snap.get('social_pool_size', 0)} 条")
+        click.echo(f"今日点赞:    {snap.get('daily_likes_done', 0)}/{snap.get('daily_like_target', '-')}")
+        if snap.get("next_post_at"):
+            click.echo(f"下次发帖:    {snap.get('next_post_at')}")
+    else:
+        click.echo("养号模拟:    关")
+
+
+@cli.command("social")
+@click.option("--enable/--disable", default=None, help="开启或关闭养号模拟")
+def social(enable: bool | None):
+    """开关养号模拟（发帖/点赞）。"""
+    manifest = load_manifest()
+    if not manifest:
+        raise click.ClickException("未配置，请先运行 `tagai-node setup`")
+    if enable is None:
+        state = "开" if manifest.social_sim_enabled else "关"
+        click.echo(f"养号模拟当前: {state}。使用 --enable 或 --disable。")
+        return
+    manifest.social_sim_enabled = enable
+    save_manifest(manifest)
+    click.echo(f"养号模拟已{'开启' if enable else '关闭'}")
 
 
 @cli.command("set-timezone")
@@ -143,12 +172,12 @@ def run():
     cookie_status = CookieStatus.OK
     scraper = TwikitScraper(ct0=ck["ct0"], auth_token=ck["auth_token"])
     executor = TaskExecutor(scraper)
-    on_task = _make_handler(executor)
-
     manifest = load_manifest()
     tz_offset = manifest.tz_offset if manifest else 8
+    social_enabled = manifest.social_sim_enabled if manifest else True
     gate = TaskGate(tz_offset=tz_offset)
-    on_task = _make_handler(executor, gate)
+    social = SocialSimulator(scraper, gate, tz_offset=tz_offset, enabled=social_enabled)
+    on_task = _make_handler(executor, gate, scraper)
 
     def _on_auth(connected: bool) -> None:
         write_status(build_status_snapshot(
@@ -172,9 +201,16 @@ def run():
         write_status(build_status_snapshot(
             phase="starting", manifest=manifest, cookie_configured=True, relayer_connected=False,
         ))
+        sim_task = asyncio.create_task(social.run_loop())
         try:
             await client.run()
         finally:
+            social.stop()
+            sim_task.cancel()
+            try:
+                await sim_task
+            except asyncio.CancelledError:
+                pass
             write_status(build_status_snapshot(
                 phase="stopped", manifest=manifest, cookie_configured=True,
                 relayer_connected=client.authed,
@@ -191,12 +227,17 @@ def run():
         ))
 
 
-def _make_handler(executor: TaskExecutor, gate: TaskGate):
+def _make_handler(executor: TaskExecutor, gate: TaskGate, scraper: TwikitScraper):
+    from . import interaction_pool
+
     async def handler(task: dict) -> dict:
         write_status({"current_subtask_id": task.get("subtask_id"), "current_assignment_id": task.get("assignment_id")})
         result = await executor.handle(task)
         raw = int(result.pop("_tweets_fetched_raw", 0))
         gate.on_task_completed(raw)
+        # 养号池：存入本批抓到的推文（含 content）
+        if result.get("tweets"):
+            interaction_pool.add_tweets(result["tweets"])
         write_status({"last_task_status": result.get("status"), "pages_fetched": result.get("pages_fetched")})
         return result
     return handler

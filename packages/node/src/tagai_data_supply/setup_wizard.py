@@ -113,6 +113,7 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
         timezone=tz,
         tz_offset=tz_offset,
         configured_at=__import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+        social_sim_enabled=True,
     ))
     write_status(build_status_snapshot(
         phase="stopped",

@@ -23,6 +23,7 @@ class Manifest:
     tagai_account_type: int = 0
     timezone: str = "UTC"
     tz_offset: int = 8  # UTC 偏移，东八区 = 8
+    social_sim_enabled: bool = True  # 养号模拟（发帖/点赞）
     configured_at: str = ""
 
 
