@@ -12,13 +12,13 @@ jest.mock('../../src/server/connections', () => ({
 describe('redispatch', () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it('buildTaskAssignMsg includes watermark', () => {
+  it('buildTaskAssignMsg includes watermark only (no twitter cursor)', () => {
     const msg = buildTaskAssignMsg({
       subtask_id: 'st1', type: 'hashtag', mode: 'continuous', params: { q: '#x' },
       cursor: 'c1', watermark_tweet_id: '999', enabled: 1,
     } as any, 'asg_1');
     expect(msg.watermark_tweet_id).toBe('999');
-    expect(msg.cursor).toBe('c1');
+    expect(msg.cursor).toBeUndefined();
   });
 
   it('redispatchSubtask picks another node', async () => {

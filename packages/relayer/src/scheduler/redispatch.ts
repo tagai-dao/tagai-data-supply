@@ -17,9 +17,6 @@ export function buildTaskAssignMsg(subtask: SubtaskRow, assignmentId: string): R
     params: subtask.params,
     mode: subtask.mode,
   };
-  if (subtask.mode === 'continuous' && subtask.cursor) {
-    msg.cursor = subtask.cursor;
-  }
   if (subtask.mode === 'round' && subtask.window_minutes) {
     msg.round_window = { minutes: subtask.window_minutes };
   }

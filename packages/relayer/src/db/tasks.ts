@@ -120,6 +120,7 @@ function normalizeSubtask(r: any): SubtaskRow {
 
 // spec §5.3: 游标持久化（与 assignment 状态变更同事务由调用方保证）
 // 注意：cursor 是 MySQL 保留字，必须反引号
+// 已废弃：Twitter 分页游标不再持久化；保留函数仅供历史数据/手工运维。
 export async function updateSubtaskCursor(subtask_id: string, cursor: string | null, owner_node: string | null): Promise<void> {
   await pool.execute(
     'UPDATE `bsc_tds_subtask` SET `cursor` = ?, cursor_owner_node = ? WHERE subtask_id = ?',

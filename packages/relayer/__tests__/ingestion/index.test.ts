@@ -28,7 +28,6 @@ jest.mock('../../src/db/client', () => ({
 }));
 jest.mock('../../src/db/tasks', () => ({
   getSubtask: jest.fn(),
-  updateSubtaskCursor: jest.fn(),
   updateSubtaskWatermark: jest.fn(),
   setAssignmentStatus: jest.fn(),
   addAssignmentAcceptedCount: jest.fn().mockResolvedValue(1),
@@ -41,7 +40,7 @@ jest.mock('../../src/db/pending', () => ({
 
 import { ingestTaskResult } from '../../src/ingestion';
 import { insertTweet, findNodeById } from '../../src/db/client';
-import { getSubtask } from '../../src/db/tasks';
+import { getSubtask, updateSubtaskWatermark } from '../../src/db/tasks';
 import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets } from '../../src/db/pending';
 
 beforeAll(() => {
@@ -115,5 +114,21 @@ describe('ingestTaskResult (spec §4.2)', () => {
     expect(tweetExistsInBscTweet).not.toHaveBeenCalled();
     expect(r.promoted).toBe(0);
     expect(r.skipped).toBe(1);
+  });
+
+  it('入库后推进 watermark，不再写 twitter cursor', async () => {
+    (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX', topic_id: 't1' });
+    (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
+    (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
+    (insertPendingTweet as jest.Mock).mockResolvedValue(true);
+    const r = await ingestTaskResult({
+      subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
+      tweets: [
+        { tweet_id: '1800000000000000001', twitter_id: '9', content: 'a', tweet_time: null },
+        { tweet_id: '1800000000000000005', twitter_id: '9', content: 'b', tweet_time: null },
+      ],
+    });
+    expect(r.watermarkAdvanced).toBe(true);
+    expect(updateSubtaskWatermark).toHaveBeenCalledWith('s1', '1800000000000000005');
   });
 });

@@ -233,7 +233,6 @@ async function handleTaskResult(nodeId: string, msg: any): Promise<void> {
       assignment_id: assignmentId,
       status,
       tweets: batchTweets,
-      next_cursor: msg.next_cursor,
       error: msg.error,
       cookie_status: msg.cookie_status,
     });

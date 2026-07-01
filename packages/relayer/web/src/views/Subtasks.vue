@@ -118,9 +118,9 @@ onMounted(load);
       </el-table-column>
       <el-table-column prop="tick" label="tick" width="120" />
       <el-table-column prop="priority" label="优先级" width="70" />
-      <el-table-column label="游标" width="180">
+      <el-table-column label="前沿 tweet" width="200">
         <template #default="{ row }">
-          <span style="font-size: 12px">{{ row.cursor || '-' }}</span>
+          <span style="font-size: 12px">{{ row.watermark_tweet_id || '-' }}</span>
         </template>
       </el-table-column>
       <el-table-column label="启用" width="90">

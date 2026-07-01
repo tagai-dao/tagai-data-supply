@@ -92,7 +92,7 @@ TDS_REPO=https://github.com/<org>/tagai-data-supply.git bash scripts/install-nod
 | 本地静默时段 | **0:00–8:00**（按 `tz_offset`，setup 时设置，如东八区填 `8`） |
 | 单次任务翻页 | 最多 **3 页**，页间 **3 秒**；本页最远推文早于 **24 小时** 则停止翻页 |
 | 每日抓取上限 | **3000 条**（API 返回条数累计） |
-| watermark | Relayer 按 subtask 存储，翻到已抓记录即停 |
+| watermark | Relayer 按 subtask 存最新已入库 `tweet_id`；Node 每次从 Latest 第一页开始，遇到 `tweet_id <= watermark` 即停翻页 |
 
 Node 拒绝任务时发 `task_decline`，Relayer **静默换人**（不扣 health）。
 
@@ -143,9 +143,9 @@ curl http://<relayer>:7701/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 ## 运维要点
-- **无状态**：relayer 调度状态全在 `bsc_tds_*`，重启自动 reconcile；调度器重启后从 DB 游标接续。
+- **无状态**：relayer 调度状态全在 `bsc_tds_*`，重启自动 reconcile；抓取前沿由 `watermark_tweet_id` 接续。
 - **cookie 失效**：节点 `auth_failed` → `disabled` + 告警；用户本地更新 cookie 后 `tagai-node run` 重新 `hello`，或后台 `POST /admin/nodes/:id/reenable`。
-- **任务回收**：节点离线/disabled 时其 active assignment 自动 reclaim，调度器重派（从 DB cursor 恢复）。
+- **任务回收**：节点离线/disabled 时其 active assignment 自动 reclaim，调度器重派（各 Node 仍从 Latest 第一页 + 当前 watermark 开始）。
 - **数据保留**：`bsc_tds_cookie_health_log` 30d / `bsc_tds_node_metric` 90d，relayer 每日清理。
 - **已知限制**：relayer 单实例（主备 RPO/RTO 待评估）；任务重派重试上限（spec §10.2 限次3）尚未硬性强制，靠调度器自然重派。
 

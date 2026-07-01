@@ -8,7 +8,7 @@ import { nanoid } from 'nanoid';
 import { logger } from '../utils/logger';
 import {
   listEnabledSubtasks, getSubtaskLastRunMap, createAssignment, getNodeActiveAssignment,
-  updateSubtaskCursor, type SubtaskRow,
+  type SubtaskRow,
 } from '../db/tasks';
 import { listOnlineNodes } from '../db/client';
 import { registry } from '../server/connections';
@@ -29,7 +29,6 @@ export interface SchedulerDeps {
   listOnlineNodes: typeof listOnlineNodes;
   getNodeActiveAssignment: typeof getNodeActiveAssignment;
   createAssignment: typeof createAssignment;
-  updateSubtaskCursor: typeof updateSubtaskCursor;
   send: (nodeId: string, msg: object) => boolean;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
@@ -41,7 +40,6 @@ const defaultDeps: SchedulerDeps = {
   listOnlineNodes,
   getNodeActiveAssignment,
   createAssignment,
-  updateSubtaskCursor,
   send: (nodeId, msg) => registry.send(nodeId, msg),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   now: () => Date.now(),
@@ -146,10 +144,6 @@ export class Scheduler {
       return false;
     }
     await this.deps.createAssignment(assignmentId, subtask.subtask_id, node.node_id);
-    // spec §5.3: continuous 游标持有者记录
-    if (subtask.mode === 'continuous') {
-      await this.deps.updateSubtaskCursor(subtask.subtask_id, subtask.cursor, node.node_id);
-    }
     logger.info({ node_id: node.node_id, subtask_id: subtask.subtask_id, assignment_id: assignmentId }, 'task assigned');
     return true;
   }

@@ -1,10 +1,10 @@
 // spec §4/§5/§13: 回传数据处理
-// 流程：校验 assignment → 先查 bsc_tweet → 写 pending 表 + all_tweets 备份 → 更新游标 → metrics
+// 流程：校验 assignment → 先查 bsc_tweet → 写 pending 表 + all_tweets 备份 → 推进 watermark → metrics
 
 import { pool } from '../db/pool';
 import { findNodeById } from '../db/client';
 import {
-  getSubtask, updateSubtaskCursor, setAssignmentStatus, addAssignmentAcceptedCount,
+  getSubtask, setAssignmentStatus, addAssignmentAcceptedCount,
   updateSubtaskWatermark,
 } from '../db/tasks';
 import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets } from '../db/pending';
@@ -27,7 +27,6 @@ export interface TaskResultInput {
   assignment_id: string;
   status: 'done' | 'failed';
   tweets?: IncomingTweet[];
-  next_cursor?: string | null;
   error?: string;
   cookie_status?: string;
 }
@@ -79,14 +78,14 @@ export interface IngestResult {
   deduped: number;
   invalid: number;
   skipped: number;
-  cursorAdvanced: boolean;
+  watermarkAdvanced: boolean;
 }
 
 export async function ingestTaskResult(input: TaskResultInput): Promise<IngestResult> {
   const subtask = await getSubtask(input.subtask_id);
   if (!subtask) {
     logger.warn({ subtask_id: input.subtask_id }, 'task_result for unknown subtask');
-    return { received: 0, promoted: 0, deduped: 0, invalid: 0, skipped: 0, cursorAdvanced: false };
+    return { received: 0, promoted: 0, deduped: 0, invalid: 0, skipped: 0, watermarkAdvanced: false };
   }
   const tick = subtask.tick || NO_TICK_SENTINEL;
   // spec §4.3: 按 node_id 取绑定 tagai 账号
@@ -142,14 +141,8 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
     }
   }
 
-  // spec §5.3: 游标推进（continuous）
-  let cursorAdvanced = false;
-  if (input.status === 'done' && input.next_cursor) {
-    await updateSubtaskCursor(input.subtask_id, String(input.next_cursor), input.node_id);
-    cursorAdvanced = true;
-  }
-
-  // watermark：用本批有效 tweet 中最大的 tweet_id 推进 subtask 水位
+  // watermark：用本批有效 tweet 中最大的 tweet_id 推进 subtask 前沿（各 Node 下次从最新开始抓）
+  let watermarkAdvanced = false;
   if (input.status === 'done' && input.tweets?.length) {
     let maxId: string | null = null;
     for (const tw of input.tweets) {
@@ -160,6 +153,7 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
     }
     if (maxId) {
       await updateSubtaskWatermark(input.subtask_id, maxId);
+      watermarkAdvanced = true;
     }
   }
 
@@ -194,11 +188,11 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
       invalid,
       skipped,
       acceptedTotal,
-      cursorAdvanced,
+      watermarkAdvanced,
     },
     'task_result ingested',
   );
-  return { received, promoted, deduped, invalid, skipped, cursorAdvanced };
+  return { received, promoted, deduped, invalid, skipped, watermarkAdvanced };
 }
 
 async function bumpMetric(node_id: string, promoted: number, deduped: number, errors: number): Promise<void> {

@@ -11,7 +11,6 @@
     "task_type": { "type": "string", "enum": ["hashtag", "user_timeline", "keyword", "list"] },
     "params": { "type": "object" },
     "mode": { "type": "string", "enum": ["continuous", "round"] },
-    "cursor": { "type": "string" },
     "watermark_tweet_id": { "type": "string" },
     "round_window": { "type": "object" }
   },

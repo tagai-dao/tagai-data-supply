@@ -23,7 +23,6 @@ function mkDeps(over: Partial<SchedulerDeps> = {}): SchedulerDeps {
     listOnlineNodes: jest.fn().mockResolvedValue([]),
     getNodeActiveAssignment: jest.fn().mockResolvedValue(null),
     createAssignment: jest.fn().mockResolvedValue(undefined),
-    updateSubtaskCursor: jest.fn().mockResolvedValue(undefined),
     send: jest.fn().mockReturnValue(true),
     sleep: jest.fn().mockResolvedValue(undefined),
     now: jest.fn().mockReturnValue(Date.now()),
@@ -51,12 +50,11 @@ describe('Scheduler (spec §8)', () => {
   it('serial mode (1 node): assigns one subtask, sends task_assign, sleeps after', async () => {
     const send = jest.fn().mockReturnValue(true);
     const createAssignment = jest.fn().mockResolvedValue(undefined);
-    const updateSubtaskCursor = jest.fn().mockResolvedValue(undefined);
     const sleep = jest.fn().mockResolvedValue(undefined);
     const deps = mkDeps({
       listEnabledSubtasks: jest.fn().mockResolvedValue([mkSubtask('s1'), mkSubtask('s2')]),
       listOnlineNodes: jest.fn().mockResolvedValue([mkNode('n1')]), // 1 节点 → serial
-      send, createAssignment, updateSubtaskCursor, sleep,
+      send, createAssignment, sleep,
     });
     const s = new Scheduler(deps);
     const r = await s.dispatchOnce();
@@ -69,7 +67,6 @@ describe('Scheduler (spec §8)', () => {
     expect(msg.assignment_id).toMatch(/^asg_/);
     expect(msg.params).toEqual({ q: '#x' });
     expect(createAssignment).toHaveBeenCalledTimes(1);
-    expect(updateSubtaskCursor).toHaveBeenCalled();
     expect(sleep).toHaveBeenCalled(); // 串行模式施加间隔
   });
 
@@ -92,17 +89,20 @@ describe('Scheduler (spec §8)', () => {
     expect(new Set(targets).size).toBe(3);
   });
 
-  it('continuous subtask includes cursor in task_assign', async () => {
+  it('continuous subtask includes watermark in task_assign', async () => {
     const send = jest.fn().mockReturnValue(true);
+    const subtask = mkSubtask('s1', 'continuous');
+    subtask.watermark_tweet_id = '1800000000000000001';
     const deps = mkDeps({
-      listEnabledSubtasks: jest.fn().mockResolvedValue([mkSubtask('s1', 'continuous', '12345')]),
+      listEnabledSubtasks: jest.fn().mockResolvedValue([subtask]),
       listOnlineNodes: jest.fn().mockResolvedValue([mkNode('n1')]),
       send,
     });
     const s = new Scheduler(deps);
     await s.dispatchOnce();
     const msg = send.mock.calls[0][1] as any;
-    expect(msg.cursor).toBe('12345');
+    expect(msg.watermark_tweet_id).toBe('1800000000000000001');
+    expect(msg.cursor).toBeUndefined();
   });
 
   it('round subtask includes round_window', async () => {

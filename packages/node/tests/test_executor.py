@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timedelta, timezone
-from tagai_data_supply.runtime.executor import TaskExecutor
+from tagai_data_supply.runtime.executor import TaskExecutor, _at_or_below_watermark
 
 
 class MockScraper:
@@ -15,13 +15,21 @@ class PagedScraper:
     def __init__(self, pages: list[dict]):
         self._pages = pages
         self._i = 0
+        self.cursors: list[str | None] = []
 
     async def fetch(self, task_type, params, cursor=None):
+        self.cursors.append(cursor)
         if self._i >= len(self._pages):
             return {"tweets": [], "next_cursor": None, "cookie_status": "ok"}
         r = self._pages[self._i]
         self._i += 1
         return r
+
+
+def test_at_or_below_watermark():
+    assert _at_or_below_watermark("100", "100") is True
+    assert _at_or_below_watermark("99", "100") is True
+    assert _at_or_below_watermark("101", "100") is False
 
 
 @pytest.mark.asyncio
@@ -35,17 +43,62 @@ async def test_executor_dedup_local():
         "cookie_status": "ok",
     })
     ex = TaskExecutor(scraper)
-    r = await ex.handle({"assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag", "params": {"q": "#x"}, "cursor": None})
+    r = await ex.handle({
+        "assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag",
+        "params": {"q": "#x"},
+    })
     assert r["type"] == "task_result"
-    assert r["assignment_id"] == "asg_1"
     assert r["status"] == "done"
-    assert r["next_cursor"] == "999"
     assert len(r["tweets"]) == 2
+    assert "next_cursor" not in r
 
-    # 第二次同样两条 → 本地去重为空
-    r2 = await ex.handle({"assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag", "params": {"q": "#x"}, "cursor": "999"})
+    r2 = await ex.handle({
+        "assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag",
+        "params": {"q": "#x"},
+    })
     assert r2["status"] == "done"
-    assert r2["tweets"] == []  # 都已见过
+    assert r2["tweets"] == []
+
+
+@pytest.mark.asyncio
+async def test_executor_always_starts_from_first_page():
+    """忽略 task_assign.cursor，每次从 Twitter 第一页开始。"""
+    scraper = PagedScraper([
+        {"tweets": [{"tweet_id": "201", "content": "a"}], "next_cursor": "p2", "cookie_status": "ok"},
+        {"tweets": [{"tweet_id": "200", "content": "b"}], "next_cursor": None, "cookie_status": "ok"},
+    ])
+    ex = TaskExecutor(scraper)
+    await ex.handle({
+        "assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag",
+        "params": {}, "cursor": "old_twitter_cursor_should_be_ignored",
+        "watermark_tweet_id": "200",
+    })
+    assert scraper.cursors[0] is None
+
+
+@pytest.mark.asyncio
+async def test_executor_stops_at_watermark():
+    scraper = PagedScraper([
+        {
+            "tweets": [
+                {"tweet_id": "300", "content": "new"},
+                {"tweet_id": "200", "content": "watermark"},
+                {"tweet_id": "199", "content": "old"},
+            ],
+            "next_cursor": "p2",
+            "cookie_status": "ok",
+        },
+        {"tweets": [{"tweet_id": "198", "content": "never"}], "next_cursor": None, "cookie_status": "ok"},
+    ])
+    ex = TaskExecutor(scraper)
+    r = await ex.handle({
+        "assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag",
+        "params": {}, "watermark_tweet_id": "200",
+    })
+    assert r["stopped_reason"] == "watermark"
+    assert len(r["tweets"]) == 1
+    assert r["tweets"][0]["tweet_id"] == "300"
+    assert scraper._i == 1
 
 
 @pytest.mark.asyncio
@@ -61,10 +114,9 @@ async def test_executor_partial_dedup():
     ex = TaskExecutor(MockScraper({
         "tweets": [{"tweet_id": "111", "content": "a"}], "next_cursor": "1", "cookie_status": "ok",
     }))
-    await ex.handle({"assignment_id": "asg_1", "subtask_id": "s", "task_type": "hashtag", "params": {}, "cursor": None})
-    # 现在 111 已见；换 scraper 返回 111+113
+    await ex.handle({"assignment_id": "asg_1", "subtask_id": "s", "task_type": "hashtag", "params": {}})
     ex.scraper = scraper
-    r = await ex.handle({"assignment_id": "asg_1", "subtask_id": "s", "task_type": "hashtag", "params": {}, "cursor": "1"})
+    r = await ex.handle({"assignment_id": "asg_1", "subtask_id": "s", "task_type": "hashtag", "params": {}})
     assert len(r["tweets"]) == 1
     assert r["tweets"][0]["tweet_id"] == "113"
 
@@ -75,7 +127,7 @@ async def test_executor_scraper_error():
         async def fetch(self, *a, **k):
             raise RuntimeError("boom")
     ex = TaskExecutor(ErrScraper())
-    r = await ex.handle({"assignment_id": "asg_1", "subtask_id": "s", "task_type": "hashtag", "params": {}, "cursor": None})
+    r = await ex.handle({"assignment_id": "asg_1", "subtask_id": "s", "task_type": "hashtag", "params": {}})
     assert r["status"] == "failed"
     assert "boom" in r["error"]
     assert r["cookie_status"] == "error"
@@ -109,7 +161,6 @@ async def test_executor_stops_pagination_when_page_tweets_older_than_24h():
         "subtask_id": "s1",
         "task_type": "hashtag",
         "params": {"q": "#x"},
-        "cursor": None,
     })
     assert r["status"] == "done"
     assert r["pages_fetched"] == 2
@@ -140,7 +191,6 @@ async def test_executor_stops_on_first_page_if_already_stale():
         "subtask_id": "s1",
         "task_type": "hashtag",
         "params": {},
-        "cursor": None,
     })
     assert r["pages_fetched"] == 1
     assert r["stopped_reason"] == "tweet_age_24h"

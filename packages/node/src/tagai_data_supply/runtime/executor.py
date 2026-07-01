@@ -1,4 +1,8 @@
-"""任务执行器：领 task_assign → 多页抓取 → 本地去重 → watermark 停止 → task_result。"""
+"""任务执行器：领 task_assign → 多页抓取 → 本地去重 → watermark 停止 → task_result。
+
+进度以 watermark_tweet_id（最新已入库推文 ID）为准，不从 Relayer 恢复 Twitter 分页游标；
+每次任务从 Latest 第一页开始，仅在单次任务内用 next_cursor 翻页。
+"""
 from __future__ import annotations
 import asyncio
 import logging
@@ -10,6 +14,15 @@ from ..client.protocol import CookieStatus
 from ..policy_constants import MAX_PAGES_PER_TASK, PAGE_INTERVAL_SEC, PAGE_MAX_TWEET_AGE_HOURS
 
 logger = logging.getLogger(__name__)
+
+
+def _at_or_below_watermark(tweet_id: str, watermark: str) -> bool:
+    """snowflake：tweet_id <= watermark 表示已到已知前沿（含 watermark 本身）。"""
+    if not tweet_id or not watermark:
+        return False
+    if not (tweet_id.isdigit() and watermark.isdigit()):
+        return tweet_id == watermark
+    return int(tweet_id) <= int(watermark)
 
 
 class Scraper(Protocol):
@@ -30,9 +43,9 @@ class TaskExecutor:
         task_type = task_assign.get("task_type")
         params = task_assign.get("params", {}) or {}
         watermark = task_assign.get("watermark_tweet_id")
-        cursor: Optional[str] = task_assign.get("cursor")
+        # 仅单次任务内的 Twitter 翻页游标；不从 task_assign 恢复历史游标
+        page_cursor: Optional[str] = None
         all_fresh: list[dict] = []
-        next_cursor: Optional[str] = None
         cookie_status = CookieStatus.OK.value
         stopped_reason: Optional[str] = None
         pages_fetched = 0
@@ -47,11 +60,11 @@ class TaskExecutor:
             for page_idx in range(MAX_PAGES_PER_TASK):
                 pages_fetched += 1
                 logger.info(
-                    "task page | subtask=%s page=%d/%d cursor=%s",
+                    "task page | subtask=%s page=%d/%d page_cursor=%s",
                     subtask_id, pages_fetched, MAX_PAGES_PER_TASK,
-                    "yes" if cursor else "no",
+                    "yes" if page_cursor else "no",
                 )
-                result = await self.scraper.fetch(task_type, params, cursor)
+                result = await self.scraper.fetch(task_type, params, page_cursor)
                 tweets = result.get("tweets", []) or []
                 tweets_fetched_raw += len(tweets)
                 hit_watermark = False
@@ -59,7 +72,7 @@ class TaskExecutor:
 
                 for tw in tweets:
                     tid = str(tw.get("tweet_id", ""))
-                    if watermark and tid and tid == str(watermark):
+                    if watermark and tid and _at_or_below_watermark(tid, str(watermark)):
                         hit_watermark = True
                         stopped_reason = "watermark"
                         break
@@ -87,16 +100,16 @@ class TaskExecutor:
                     )
                     break
 
-                next_cursor = result.get("next_cursor")
+                page_next = result.get("next_cursor")
                 cookie_status = result.get("cookie_status", CookieStatus.OK.value)
                 if cookie_status != CookieStatus.OK.value:
                     stopped_reason = stopped_reason or f"cookie_{cookie_status}"
                     break
-                if not next_cursor:
+                if not page_next:
                     stopped_reason = stopped_reason or "no_next_cursor"
                     break
 
-                cursor = next_cursor
+                page_cursor = page_next
                 if page_idx < MAX_PAGES_PER_TASK - 1:
                     await asyncio.sleep(PAGE_INTERVAL_SEC)
 
@@ -123,7 +136,6 @@ class TaskExecutor:
             "subtask_id": subtask_id,
             "status": "done",
             "tweets": all_fresh,
-            "next_cursor": next_cursor,
             "cookie_status": cookie_status,
             "pages_fetched": pages_fetched,
             "stopped_reason": stopped_reason,
