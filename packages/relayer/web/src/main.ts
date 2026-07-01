@@ -10,6 +10,7 @@ import Topics from './views/Topics.vue';
 import Subtasks from './views/Subtasks.vue';
 import Nodes from './views/Nodes.vue';
 import Invites from './views/Invites.vue';
+import Pending from './views/Pending.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: Login },
@@ -18,6 +19,7 @@ const routes = [
   { path: '/subtasks', name: 'subtasks', component: Subtasks, meta: { title: '子任务' } },
   { path: '/nodes', name: 'nodes', component: Nodes, meta: { title: '节点' } },
   { path: '/invites', name: 'invites', component: Invites, meta: { title: '邀请码' } },
+  { path: '/pending', name: 'pending', component: Pending, meta: { title: '推文处理' } },
 ];
 
 const router = createRouter({

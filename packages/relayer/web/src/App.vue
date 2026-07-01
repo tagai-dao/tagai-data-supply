@@ -13,6 +13,7 @@ const menus = [
   { name: 'subtasks', label: '子任务', icon: 'List' },
   { name: 'nodes', label: '节点', icon: 'Connection' },
   { name: 'invites', label: '邀请码', icon: 'Ticket' },
+  { name: 'pending', label: '推文处理', icon: 'Document' },
 ];
 
 function logout() {

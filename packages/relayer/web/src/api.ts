@@ -57,6 +57,10 @@ export const api = {
   createInvite: (label?: string) =>
     http.post('/admin/invites', { label }).then(unwrap),
   listInvites: () => http.get('/admin/invites').then(unwrap),
+
+  // pending 推文处理
+  listPending: (status = 3) => http.get('/admin/pending', { params: { status } }).then(unwrap),
+  retryPending: (id: number) => http.post(`/admin/pending/${id}/retry`).then(unwrap),
 };
 
 export function setToken(token: string) {
