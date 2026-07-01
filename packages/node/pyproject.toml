@@ -10,7 +10,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-scraper = ["twikit>=2.0"]
+# twikit-ng 提供 twikit 命名空间，修复 2026-03 X 改版（勿与 twikit 2.3.3 混装）
+scraper = ["twikit-ng>=2.5.1"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [project.scripts]

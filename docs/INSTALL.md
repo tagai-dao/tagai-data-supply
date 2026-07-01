@@ -19,7 +19,7 @@ FLUSH PRIVILEGES;
 ```bash
 mysql -u tds_writer -p tiptag < packages/relayer/migrations/001_tds_tables.sql
 # 增量迁移（按序号执行至最新）
-mysql -u tds_writer -p tiptag < packages/relayer/migrations/007_anti_ban_policy.sql
+mysql -u tds_writer -p tiptag < packages/relayer/migrations/011_pending_author_stats.sql
 ```
 
 ### 核对线上 bsc_tweet schema（spec §5.1 Critical）
@@ -90,7 +90,7 @@ TDS_REPO=https://github.com/<org>/tagai-data-supply.git bash scripts/install-nod
 |------|-----|
 | 任务完成后冷却 | 随机 **3–30 分钟** 后才接受下一任务 |
 | 本地静默时段 | **0:00–8:00**（按 `tz_offset`，setup 时设置，如东八区填 `8`） |
-| 单次任务翻页 | 最多 **3 页**，页间 **3 秒** |
+| 单次任务翻页 | 最多 **3 页**，页间 **3 秒**；本页最远推文早于 **24 小时** 则停止翻页 |
 | 每日抓取上限 | **3000 条**（API 返回条数累计） |
 | watermark | Relayer 按 subtask 存储，翻到已抓记录即停 |
 
@@ -146,7 +146,7 @@ curl http://<relayer>:7701/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
 - **无状态**：relayer 调度状态全在 `bsc_tds_*`，重启自动 reconcile；调度器重启后从 DB 游标接续。
 - **cookie 失效**：节点 `auth_failed` → `disabled` + 告警；用户本地更新 cookie 后 `tagai-node run` 重新 `hello`，或后台 `POST /admin/nodes/:id/reenable`。
 - **任务回收**：节点离线/disabled 时其 active assignment 自动 reclaim，调度器重派（从 DB cursor 恢复）。
-- **数据保留**：`bsc_tds_tweet_raw` 7d / `bsc_tds_cookie_health_log` 30d / `bsc_tds_node_metric` 90d，relayer 每日清理。
+- **数据保留**：`bsc_tds_cookie_health_log` 30d / `bsc_tds_node_metric` 90d，relayer 每日清理。
 - **已知限制**：relayer 单实例（主备 RPO/RTO 待评估）；任务重派重试上限（spec §10.2 限次3）尚未硬性强制，靠调度器自然重派。
 
 ## 已知风险（spec §16）

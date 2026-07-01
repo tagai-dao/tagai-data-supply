@@ -28,6 +28,9 @@ class TaskGate:
     def set_busy(self, busy: bool) -> None:
         self._busy = busy
 
+    def is_busy(self) -> bool:
+        return self._busy
+
     def _local_now(self) -> datetime:
         return datetime.now(timezone.utc) + timedelta(hours=self.tz_offset)
 

@@ -5,7 +5,7 @@ import urllib.request
 
 import click
 
-from .registration import register_with_relayer, verify_tagai_account, local_timezone as _local_timezone
+from .registration import register_with_relayer, verify_invite, verify_tagai_account, local_timezone as _local_timezone
 from .config import ensure_config_dir
 from .cookie import save_cookie
 from .node_state import save_state, load_state
@@ -59,13 +59,27 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
             break
         click.echo("无法连接 Relayer，请检查地址与网络。", err=True)
 
-    # 2. Invite
+    # 2. Invite（输入后立即验证，不消费）
     while True:
         secret = invite_secret or click.prompt("Invite secret", hide_input=True)
-        if secret.strip():
-            invite_secret = secret.strip()
+        secret = secret.strip()
+        if not secret:
+            click.echo("邀请码不能为空。", err=True)
+            continue
+        click.echo("正在验证邀请码...")
+        try:
+            info = verify_invite(http_base, secret)
+            invite_secret = secret
+            label = info.get("label")
+            if label:
+                click.echo(f"✓ 邀请码有效（标签: {label}）")
+            else:
+                click.echo("✓ 邀请码有效")
             break
-        click.echo("邀请码不能为空。", err=True)
+        except click.ClickException as e:
+            click.echo(str(e), err=True)
+            click.echo("请重新输入邀请码。\n", err=True)
+            invite_secret = None
 
     # 3. 收益账号（输入 username 后后台验证，类型从 TagAI 库读取）
     acct_type = 0

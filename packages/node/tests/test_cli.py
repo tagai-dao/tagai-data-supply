@@ -2,7 +2,7 @@ import json
 from unittest.mock import patch, MagicMock
 import pytest
 import click
-from tagai_data_supply.registration import register_with_relayer, verify_tagai_account
+from tagai_data_supply.registration import register_with_relayer, verify_invite, verify_tagai_account
 
 
 def test_register_includes_tagai_username():
@@ -33,6 +33,35 @@ def test_register_excludes_none_fields():
         body = json.loads(data.decode())
         assert 'tagai_username' not in body
         assert 'label' not in body
+
+
+def test_verify_invite_ok():
+    with patch('tagai_data_supply.registration.urllib.request') as m:
+        resp = MagicMock()
+        resp.read.return_value = json.dumps({
+            'c': 0, 'd': {'ok': True, 'invite_id': 'inv_1', 'label': 'lab1'},
+        }).encode()
+        opener = MagicMock()
+        opener.open.return_value.__enter__.return_value = resp
+        m.build_opener.return_value = opener
+        d = verify_invite('http://h:7701', 'secret')
+        assert d['invite_id'] == 'inv_1'
+        assert d['label'] == 'lab1'
+
+
+def test_verify_invite_403_friendly():
+    import urllib.error
+    with patch('tagai_data_supply.registration.urllib.request') as m:
+        opener = MagicMock()
+        opener.open.side_effect = urllib.error.HTTPError(
+            'url', 403, 'Forbidden', {}, None,
+        )
+        opener.open.return_value.__enter__.side_effect = opener.open.side_effect
+        m.build_opener.return_value = opener
+        m.HTTPError = urllib.error.HTTPError
+        with pytest.raises(click.ClickException) as exc:
+            verify_invite('http://h:7701', 'used-code')
+        assert '邀请码' in str(exc.value)
 
 
 def test_verify_tagai_account_ok():

@@ -46,6 +46,24 @@ export function dayNumber(d: Date = new Date()): number {
   return y * 10000 + m * 100 + day;
 }
 
+function toOptionalInt(v: unknown): number | null {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
+function toOptionalBool(v: unknown): boolean | null {
+  if (v == null) return null;
+  if (typeof v === 'boolean') return v;
+  if (typeof v === 'number') return v !== 0;
+  if (typeof v === 'string') {
+    const s = v.toLowerCase();
+    if (s === 'true' || s === '1') return true;
+    if (s === 'false' || s === '0') return false;
+  }
+  return null;
+}
+
 function toTweetTime(t: IncomingTweet['tweet_time']): Date | string {
   if (t == null) return new Date();
   if (typeof t === 'number') {
@@ -97,6 +115,15 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
       const inserted = await insertPendingTweet({
         tweet_id: tw.tweet_id,
         twitter_id: String(tw.twitter_id ?? ''),
+        twitter_username: tw.twitter_username != null ? String(tw.twitter_username) : null,
+        twitter_name: tw.twitter_name != null ? String(tw.twitter_name) : null,
+        profile: tw.profile != null ? String(tw.profile) : null,
+        followers: toOptionalInt(tw.followers),
+        followings: toOptionalInt(tw.followings),
+        tweet_count: toOptionalInt(tw.tweet_count),
+        like_count: toOptionalInt(tw.like_count),
+        listed_count: toOptionalInt(tw.listed_count),
+        verified: toOptionalBool(tw.verified),
         content: String(tw.content ?? ''),
         tweet_time: toTweetTime(tw.tweet_time),
         node_id: input.node_id,

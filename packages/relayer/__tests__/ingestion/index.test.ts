@@ -88,11 +88,17 @@ describe('ingestTaskResult (spec §4.2)', () => {
     (insertPendingTweet as jest.Mock).mockResolvedValue(true);
     const r = await ingestTaskResult({
       subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
-      tweets: [{ tweet_id: '1800000000000000002', twitter_id: '9', content: 'hi', tweet_time: null }],
+      tweets: [{
+        tweet_id: '1800000000000000002', twitter_id: '9', content: 'hi', tweet_time: null,
+        twitter_username: 'alice', twitter_name: 'Alice', profile: 'https://x.com/a.jpg',
+        followers: 100, followings: 50, tweet_count: 200, like_count: 300, listed_count: 4, verified: true,
+      }],
     });
     expect(r.promoted).toBe(1);
     expect(insertPendingTweet).toHaveBeenCalledWith(expect.objectContaining({
       tweet_id: '1800000000000000002', tagai_account: '111', tagai_account_type: 0, tick: 'SPACEX',
+      twitter_username: 'alice', twitter_name: 'Alice', profile: 'https://x.com/a.jpg',
+      followers: 100, followings: 50, tweet_count: 200, like_count: 300, listed_count: 4, verified: true,
     }));
     expect(backupToAllTweets).toHaveBeenCalled();
   });

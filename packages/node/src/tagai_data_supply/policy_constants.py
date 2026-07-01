@@ -14,6 +14,8 @@ DAILY_TWEET_LIMIT = 3000
 # 单次 assignment 翻页
 MAX_PAGES_PER_TASK = 3
 PAGE_INTERVAL_SEC = 3
+# 本页最远推文早于该小时数则停止翻页
+PAGE_MAX_TWEET_AGE_HOURS = 24
 
 # 养号模拟（SocialSimulator）
 POST_INTERVAL_HOURS = 30

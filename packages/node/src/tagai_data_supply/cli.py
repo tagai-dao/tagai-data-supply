@@ -2,8 +2,11 @@
 from __future__ import annotations
 import asyncio
 import json
+import logging
+import os
 import urllib.request
 import urllib.error
+from pathlib import Path
 
 import click
 
@@ -14,6 +17,7 @@ from .client.protocol import CookieStatus
 from .client.ws import NodeClient
 from .runtime.executor import TaskExecutor
 from .scraper.twikit_scraper import TwikitScraper
+from .scraper_probe import run_scraper_probe, format_probe_report
 from .runtime_store import (
     load_manifest, save_manifest, write_status, read_status, build_status_snapshot,
 )
@@ -22,6 +26,13 @@ from .registration import register_with_relayer, verify_tagai_account, local_tim
 from .task_gate import TaskGate
 from .social_simulator import SocialSimulator
 from . import social_state, interaction_pool
+from .node_logging import (
+    DEFAULT_LOG_FILE, setup_node_logging, start_daemon, stop_daemon,
+    tail_log_file, read_pid, is_process_alive, clear_pid,
+)
+from .status_reporter import status_reporter_loop
+
+logger = logging.getLogger(__name__)
 
 
 @click.group(invoke_without_command=True)
@@ -145,6 +156,52 @@ def configure(http_base: str, invite_secret: str, tagai_username: str, label: st
     click.echo(f"注册成功: node_id={cred['node_id']}。请 `tagai-node login` 后 `run`。")
 
 
+@cli.command("test-scraper")
+@click.option("--ct0", default=None, help="覆盖本地 cookie 的 ct0")
+@click.option("--auth-token", default=None, help="覆盖本地 cookie 的 auth_token")
+@click.option("--type", "task_type", default="hashtag",
+              type=click.Choice(["hashtag", "keyword", "user_timeline"], case_sensitive=False),
+              show_default=True, help="探测用的任务类型")
+@click.option("--query", default="#bitcoin", show_default=True, help="hashtag/keyword 查询词")
+@click.option("--username", default="", help="user_timeline 时的 Twitter 用户名")
+@click.option("--no-home", is_flag=True, help="跳过 Home 时间线探测")
+@click.option("--json", "as_json", is_flag=True, help="JSON 输出")
+def test_scraper(ct0: str | None, auth_token: str | None, task_type: str,
+                 query: str, username: str, no_home: bool, as_json: bool):
+    """单独验证 twikit 爬虫与 cookie（不连 Relayer）。"""
+    try:
+        import twikit  # noqa: F401
+    except ImportError as e:
+        raise click.ClickException(
+            f"Twitter 抓取库未安装。请执行: "
+            f"pip uninstall twikit twifork twikit-ng -y && pip install -e \".[scraper]\""
+        ) from e
+
+    ck = load_cookie() or {}
+    use_ct0 = (ct0 or ck.get("ct0") or "").strip()
+    use_token = (auth_token or ck.get("auth_token") or "").strip()
+    if not use_ct0 or not use_token:
+        raise click.ClickException(
+            "缺少 cookie。先运行 `tagai-node login`，或用 --ct0 / --auth-token 传入。"
+        )
+
+    scraper = TwikitScraper(ct0=use_ct0, auth_token=use_token)
+    report = asyncio.run(run_scraper_probe(
+        scraper,
+        task_type=task_type,
+        query=query,
+        username=username,
+        include_home=not no_home,
+    ))
+    cookie_meta = {"ct0": use_ct0, "auth_token": use_token}
+    if as_json:
+        click.echo(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        click.echo(format_probe_report(report, cookie_meta=cookie_meta))
+    if not report.get("ok"):
+        raise SystemExit(1)
+
+
 @cli.command()
 @click.option("--ct0", prompt="ct0", hide_input=True)
 @click.option("--auth-token", prompt="auth_token", hide_input=True)
@@ -157,8 +214,61 @@ def login(ct0: str, auth_token: str):
 
 
 @cli.command()
-def run():
+@click.option("-d", "--daemon", is_flag=True, help="后台运行（日志写入文件）")
+@click.option("--foreground", is_flag=True, hidden=True, help="内部：daemon 子进程前台运行")
+@click.option("--log-file", type=click.Path(), default=None, help="日志文件路径")
+@click.option("--status-interval", default=300, show_default=True, help="状态播报间隔（秒）")
+def run(daemon: bool, foreground: bool, log_file: str | None, status_interval: int):
     """常驻运行：WS 连接 → 领任务 → 抓取 → 回传。"""
+    if daemon and foreground:
+        raise click.ClickException("--daemon 与 --foreground 不能同时使用")
+
+    log_path = Path(log_file) if log_file else DEFAULT_LOG_FILE
+
+    if daemon:
+        try:
+            pid = start_daemon(log_file=log_path, status_interval=status_interval)
+        except RuntimeError as e:
+            raise click.ClickException(str(e)) from e
+        click.echo(f"节点已在后台启动 (pid={pid})")
+        click.echo(f"查看日志: tagai-node logs -f")
+        click.echo(f"停止节点: tagai-node stop")
+        return
+
+    _run_foreground(log_path=log_path, status_interval=status_interval, console=not foreground)
+
+
+@cli.command()
+@click.option("-f", "--follow", is_flag=True, help="持续跟踪新日志（类似 tail -f）")
+@click.option("-n", "--lines", default=50, show_default=True, help="显示最近行数")
+@click.option("--log-file", type=click.Path(), default=None, help="日志文件路径")
+def logs(follow: bool, lines: int, log_file: str | None):
+    """查看节点运行日志。"""
+    path = Path(log_file) if log_file else DEFAULT_LOG_FILE
+    tail_log_file(path, lines=lines, follow=follow)
+
+
+@cli.command()
+def stop():
+    """停止后台运行的节点。"""
+    pid = read_pid()
+    if not pid:
+        click.echo("未找到运行中的后台节点。")
+        return
+    if not is_process_alive(pid):
+        clear_pid()
+        click.echo("后台节点已退出（已清理 pid 文件）。")
+        return
+    if stop_daemon():
+        click.echo(f"已发送停止信号 (pid={pid})。")
+    else:
+        click.echo(f"无法停止节点 (pid={pid})。")
+
+
+def _run_foreground(*, log_path, status_interval: int, console: bool) -> None:
+    """前台运行主循环（可被 daemon 子进程调用）。"""
+    setup_node_logging(log_file=log_path, console=console)
+
     cfg = load_state()
     if not cfg or not cfg.node_token:
         raise click.ClickException("未注册，请先运行 `tagai-node setup`")
@@ -183,6 +293,10 @@ def run():
             cookie_configured=True,
             relayer_connected=connected,
         ))
+        if connected:
+            logger.info("relayer connected | url=%s", cfg.relayer_url)
+        else:
+            logger.info("relayer disconnected")
 
     client = NodeClient(
         relayer_url=cfg.relayer_url,
@@ -198,10 +312,28 @@ def run():
         write_status(build_status_snapshot(
             phase="starting", manifest=manifest, cookie_configured=True, relayer_connected=False,
         ))
+        logger.info(
+            "node starting | relayer=%s tz_offset=UTC%+d status_interval=%ds",
+            cfg.relayer_url, tz_offset, status_interval,
+        )
+        reporter_stop = asyncio.Event()
         sim_task = asyncio.create_task(social.run_loop())
+        reporter_task = asyncio.create_task(status_reporter_loop(
+            interval_sec=status_interval,
+            gate=gate,
+            is_connected=lambda: client.authed,
+            is_busy=lambda: gate.is_busy(),
+            stop_event=reporter_stop,
+        ))
         try:
             await client.run()
         finally:
+            reporter_stop.set()
+            reporter_task.cancel()
+            try:
+                await reporter_task
+            except asyncio.CancelledError:
+                pass
             social.stop()
             sim_task.cancel()
             try:
@@ -212,30 +344,53 @@ def run():
                 phase="stopped", manifest=manifest, cookie_configured=True,
                 relayer_connected=client.authed,
             ))
+            logger.info("node stopped")
+            if read_pid() == os.getpid():
+                clear_pid()
 
-    click.echo(f"运行中（relayer={cfg.relayer_url}, tz_offset=UTC{tz_offset:+d}）")
+    if console:
+        click.echo(f"运行中（relayer={cfg.relayer_url}, tz_offset=UTC{tz_offset:+d}）")
+        click.echo(f"日志文件: {log_path}")
     try:
         asyncio.run(_run_with_status())
     except KeyboardInterrupt:
-        click.echo("停止中...")
+        if console:
+            click.echo("停止中...")
+        logger.info("node interrupted by user")
         client.stop()
         write_status(build_status_snapshot(
             phase="stopped", manifest=manifest, cookie_configured=True, relayer_connected=False,
         ))
+        if read_pid() == os.getpid():
+            clear_pid()
 
 
 def _make_handler(executor: TaskExecutor, gate: TaskGate, scraper: TwikitScraper):
     from . import interaction_pool
 
     async def handler(task: dict) -> dict:
-        write_status({"current_subtask_id": task.get("subtask_id"), "current_assignment_id": task.get("assignment_id")})
+        subtask_id = task.get("subtask_id")
+        logger.info("task handling | subtask=%s", subtask_id)
+        write_status({
+            "current_subtask_id": subtask_id,
+            "current_assignment_id": task.get("assignment_id"),
+            "last_error": None,
+        })
         result = await executor.handle(task)
         raw = int(result.pop("_tweets_fetched_raw", 0))
         gate.on_task_completed(raw)
-        # 养号池：存入本批抓到的推文（含 content）
         if result.get("tweets"):
             interaction_pool.add_tweets(result["tweets"])
-        write_status({"last_task_status": result.get("status"), "pages_fetched": result.get("pages_fetched")})
+        write_status({
+            "last_task_status": result.get("status"),
+            "pages_fetched": result.get("pages_fetched"),
+            "current_subtask_id": None,
+            "current_assignment_id": None,
+        })
+        logger.info(
+            "task finished | subtask=%s status=%s daily_raw=+%d",
+            subtask_id, result.get("status"), raw,
+        )
         return result
     return handler
 

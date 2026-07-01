@@ -31,14 +31,14 @@ CREATE TABLE IF NOT EXISTS `bsc_tds_topic` (
   PRIMARY KEY (`topic_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='tds 抓取主题';
 
--- 子任务（spec §5.2：tick 创建必填；cursor varchar(64)）
+-- 子任务（spec §5.2：tick 创建必填；cursor 存 X 分页游标，可为长字符串）
 CREATE TABLE IF NOT EXISTS `bsc_tds_subtask` (
   `subtask_id` varchar(64) NOT NULL,
   `topic_id` varchar(64) NOT NULL,
   `type` enum('hashtag','user_timeline','keyword','list') NOT NULL,
   `mode` enum('continuous','round') NOT NULL DEFAULT 'continuous',
   `params` json NOT NULL,
-  `cursor` varchar(64) DEFAULT NULL,
+  `cursor` text DEFAULT NULL,
   `cursor_owner_node` varchar(64) DEFAULT NULL,
   `schedule_cron` varchar(64) DEFAULT NULL,
   `window_minutes` int DEFAULT NULL,
@@ -68,21 +68,6 @@ CREATE TABLE IF NOT EXISTS `bsc_tds_assignment` (
   KEY `idx_node_status` (`node_id`, `status`),
   KEY `idx_subtask` (`subtask_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='tds 任务派发记录';
-
--- 原始推文留痕（spec §5.1：去重前暂存）
-CREATE TABLE IF NOT EXISTS `bsc_tds_tweet_raw` (
-  `id` bigint NOT NULL AUTO_INCREMENT,
-  `subtask_id` varchar(64) NOT NULL,
-  `node_id` varchar(64) NOT NULL,
-  `tweet_id` varchar(64) NOT NULL,
-  `raw_json` json NOT NULL,
-  `promoted` tinyint(1) NOT NULL DEFAULT 0,
-  `received_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `update_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  PRIMARY KEY (`id`),
-  KEY `idx_received` (`received_at`),
-  KEY `idx_tweet` (`tweet_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='tds 原始推文留痕';
 
 -- 节点指标
 CREATE TABLE IF NOT EXISTS `bsc_tds_node_metric` (

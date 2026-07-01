@@ -32,7 +32,6 @@ export const ASSIGNMENT_MAX_TWEETS = 200;
 
 // spec §5.5: 数据保留期（天）
 export const RETENTION = {
-  tweet_raw: 7,
   cookie_health_log: 30,
   node_metric: 90,
 } as const;

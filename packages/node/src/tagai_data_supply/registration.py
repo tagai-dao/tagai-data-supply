@@ -31,6 +31,38 @@ def _friendly_verify_error(http_code: int, detail: str) -> str:
     return f"验证失败 (HTTP {http_code})：{detail}"
 
 
+def _friendly_invite_error(http_code: int, detail: str) -> str:
+    """邀请码预检/注册失败时的中文提示。"""
+    low = detail.lower()
+    if 'already used' in low or 'used invite' in low:
+        return "邀请码验证失败：该邀请码已被使用。请在管理后台重新生成邀请码。"
+    if 'revoked' in low:
+        return "邀请码验证失败：该邀请码已作废。请联系管理员获取新邀请码。"
+    if 'not found' in low or 'invalid' in low:
+        return "邀请码验证失败：邀请码不存在或输入错误。请核对后重试。"
+    if http_code == 400:
+        return f"请求参数错误：{detail}"
+    return f"邀请码验证失败 (HTTP {http_code})：{detail}"
+
+
+def verify_invite(http_base: str, invite_secret: str) -> dict:
+    """setup 预检：校验邀请码有效且未使用，不消费。"""
+    url = http_base.rstrip("/") + "/node/verify-invite"
+    body = json.dumps({"invite_secret": invite_secret}).encode("utf-8")
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(req, timeout=15) as resp:
+            parsed = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        raise click.ClickException(_friendly_invite_error(e.code, detail)) from e
+    if parsed.get("c") != 0 or not parsed.get("d", {}).get("ok"):
+        msg = parsed.get("m") or "unknown"
+        raise click.ClickException(_friendly_invite_error(403, str(msg)))
+    return parsed["d"]
+
+
 def verify_tagai_account(http_base: str, tagai_username: str) -> dict:
     """setup 预检：仅需 username，account_type 由服务端从库记录返回。"""
     url = http_base.rstrip("/") + "/node/verify-account"
@@ -73,6 +105,8 @@ def register_with_relayer(http_base: str, invite_secret: str, timezone: str,
         detail = e.read().decode("utf-8", errors="replace")
         if e.code == 403 and 'tagai account' in detail.lower():
             raise click.ClickException(_friendly_verify_error(e.code, detail))
+        if e.code == 403 and 'invite' in detail.lower():
+            raise click.ClickException(_friendly_invite_error(e.code, detail))
         raise click.ClickException(f"register failed: HTTP {e.code} {detail}")
     parsed = RegisterResponse.model_validate(body)
     if parsed.c != 0 or not parsed.d:

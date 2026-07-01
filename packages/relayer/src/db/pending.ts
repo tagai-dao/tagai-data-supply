@@ -13,6 +13,15 @@ export async function tweetExistsInBscTweet(tweet_id: string): Promise<boolean> 
 export interface PendingTweet {
   tweet_id: string;
   twitter_id: string;
+  twitter_username?: string | null;
+  twitter_name?: string | null;
+  profile?: string | null;
+  followers?: number | null;
+  followings?: number | null;
+  tweet_count?: number | null;
+  like_count?: number | null;
+  listed_count?: number | null;
+  verified?: boolean | number | null;
   content: string;
   tweet_time: Date | string;
   node_id: string;
@@ -27,9 +36,12 @@ export interface PendingTweet {
 export async function insertPendingTweet(p: PendingTweet): Promise<boolean> {
   const [res] = await pool.execute(
     `INSERT IGNORE INTO \`bsc_tds_pending_tweet\`
-     (tweet_id, twitter_id, content, tweet_time, node_id, tagai_account, tagai_account_type, topic_id, subtask_id, tick, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-    [p.tweet_id, p.twitter_id, p.content, p.tweet_time, p.node_id, p.tagai_account,
+     (tweet_id, twitter_id, twitter_username, twitter_name, profile, followers, followings, tweet_count, like_count, listed_count, verified, content, tweet_time, node_id, tagai_account, tagai_account_type, topic_id, subtask_id, tick, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    [p.tweet_id, p.twitter_id, p.twitter_username ?? null, p.twitter_name ?? null, p.profile ?? null,
+     p.followers ?? null, p.followings ?? null, p.tweet_count ?? null, p.like_count ?? null,
+     p.listed_count ?? null, p.verified == null ? null : (p.verified ? 1 : 0),
+     p.content, p.tweet_time, p.node_id, p.tagai_account,
      p.tagai_account_type, p.topic_id, p.subtask_id, p.tick],
   );
   return (res as any).affectedRows > 0;

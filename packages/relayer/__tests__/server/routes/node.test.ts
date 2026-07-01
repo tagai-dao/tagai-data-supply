@@ -2,6 +2,7 @@ import request from 'supertest';
 import { app } from '../../../src/server/app';
 
 jest.mock('../../../src/db/client', () => ({
+  checkInvite: jest.fn(),
   consumeInvite: jest.fn(),
   createNode: jest.fn(),
   linkInviteNode: jest.fn().mockResolvedValue(undefined),
@@ -17,7 +18,7 @@ jest.mock('../../../src/tagai/client', () => ({
   verifyTagaiAccount: jest.fn().mockResolvedValue({ twitter_id: '111', twitter_username: 'alice', account_type: 0 }),
 }));
 
-import { consumeInvite, createNode } from '../../../src/db/client';
+import { checkInvite, consumeInvite, createNode } from '../../../src/db/client';
 import { verifyTagaiAccount } from '../../../src/tagai/client';
 import { registerLimiter } from '../../../src/server/routes/node';
 
@@ -38,6 +39,32 @@ const GOOD_BODY = {
   invite_secret: 'good', protocol_version: '1', timezone: 'UTC',
   tagai_username: 'alice',
 };
+
+describe('POST /node/verify-invite', () => {
+  it('400 when invite_secret missing', async () => {
+    const res = await request(app).post('/node/verify-invite').send({});
+    expect(res.status).toBe(400);
+    expect(checkInvite).not.toHaveBeenCalled();
+  });
+
+  it('403 when invite invalid or used', async () => {
+    (checkInvite as jest.Mock).mockResolvedValueOnce({ ok: false, reason: 'used' });
+    const res = await request(app).post('/node/verify-invite').send({ invite_secret: 'bad' });
+    expect(res.status).toBe(403);
+    expect(res.body.m).toMatch(/already used/);
+    expect(consumeInvite).not.toHaveBeenCalled();
+  });
+
+  it('200 when invite active', async () => {
+    (checkInvite as jest.Mock).mockResolvedValueOnce({ ok: true, invite_id: 'inv_1', label: 'lab1' });
+    const res = await request(app).post('/node/verify-invite').send({ invite_secret: 'good' });
+    expect(res.status).toBe(200);
+    expect(res.body.d.ok).toBe(true);
+    expect(res.body.d.label).toBe('lab1');
+    expect(checkInvite).toHaveBeenCalledWith('good');
+    expect(consumeInvite).not.toHaveBeenCalled();
+  });
+});
 
 describe('POST /node/verify-account', () => {
   it('403 when tagai account not verified', async () => {

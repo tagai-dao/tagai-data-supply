@@ -60,12 +60,12 @@ class NodeClient:
                 await self._connect_and_serve()
                 attempt = 0  # 成功过则重置退避
             except Exception as e:
-                logger.warning("ws disconnected: %s", e)
+                logger.warning("ws disconnected | error=%s", e)
             if self._stop.is_set():
                 break
             attempt += 1
             delay = self._backoff(attempt)
-            logger.info("reconnect in %.1fs (attempt %d)", delay, attempt)
+            logger.info("ws reconnect | delay=%.1fs attempt=%d", delay, attempt)
             try:
                 await asyncio.wait_for(self._stop.wait(), timeout=delay)
             except asyncio.TimeoutError:
@@ -114,7 +114,7 @@ class NodeClient:
         self.authed = True
         if self._on_auth_change:
             self._on_auth_change(True)
-        logger.info("ws authed as node %s", ack.node_id)
+        logger.info("ws connected | node_id=%s", ack.node_id)
 
     async def _serve(self, ws) -> None:
         """接收消息 + 定时心跳，直到连接断开。"""
@@ -141,14 +141,25 @@ class NodeClient:
         if t == MessageType.PING.value:
             await ws.send(json.dumps({"type": MessageType.PONG.value}))
         elif t == MessageType.TASK_ASSIGN.value and self.on_task:
+            subtask_id = msg.get("subtask_id")
+            assignment_id = msg.get("assignment_id")
+            task_type = msg.get("task_type")
+            logger.info(
+                "task received | subtask=%s assignment=%s type=%s",
+                subtask_id, assignment_id, task_type,
+            )
             ok, reason = (True, None)
             if self._task_gate is not None:
                 ok, reason = self._task_gate.check_accept()
             if not ok:
+                logger.info(
+                    "task declined | subtask=%s reason=%s",
+                    subtask_id, reason or "busy",
+                )
                 await ws.send(json.dumps({
                     "type": MessageType.TASK_DECLINE.value,
-                    "assignment_id": msg.get("assignment_id"),
-                    "subtask_id": msg.get("subtask_id"),
+                    "assignment_id": assignment_id,
+                    "subtask_id": subtask_id,
                     "reason": reason or "busy",
                 }))
                 return
@@ -158,6 +169,13 @@ class NodeClient:
                 result = await self.on_task(msg)
                 if result:
                     await ws.send(json.dumps(result))
+                    logger.info(
+                        "task reported | subtask=%s status=%s pages=%s fresh=%d",
+                        subtask_id,
+                        result.get("status"),
+                        result.get("pages_fetched"),
+                        len(result.get("tweets") or []),
+                    )
             finally:
                 if self._task_gate is not None:
                     self._task_gate.set_busy(False)

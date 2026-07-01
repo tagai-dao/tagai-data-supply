@@ -69,7 +69,6 @@ export async function reclaimNodeAssignments(node_id: string): Promise<number> {
 
 // spec §5.5: 数据保留清理 job
 export async function cleanupRetainedData(): Promise<void> {
-  await pool.execute(`DELETE FROM \`bsc_tds_tweet_raw\` WHERE received_at < DATE_SUB(NOW(), INTERVAL ${RETENTION.tweet_raw} DAY)`);
   await pool.execute(`DELETE FROM \`bsc_tds_cookie_health_log\` WHERE ts < DATE_SUB(NOW(), INTERVAL ${RETENTION.cookie_health_log} DAY)`);
   await pool.execute(`DELETE FROM \`bsc_tds_node_metric\` WHERE date < DATE_SUB(CURDATE(), INTERVAL ${RETENTION.node_metric} DAY)`);
   logger.info('retained data cleanup done');

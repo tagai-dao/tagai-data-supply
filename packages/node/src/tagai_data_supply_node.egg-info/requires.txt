@@ -7,4 +7,4 @@ pytest>=8.0
 pytest-asyncio>=0.23
 
 [scraper]
-twikit>=2.0
+twikit-ng>=2.5.1

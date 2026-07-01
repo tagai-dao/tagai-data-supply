@@ -5,8 +5,9 @@ import logging
 from typing import Any, Optional, Protocol
 
 from .dedup import BoundedSet
+from .tweet_time import oldest_tweet_time, page_exceeds_max_age
 from ..client.protocol import CookieStatus
-from ..policy_constants import MAX_PAGES_PER_TASK, PAGE_INTERVAL_SEC
+from ..policy_constants import MAX_PAGES_PER_TASK, PAGE_INTERVAL_SEC, PAGE_MAX_TWEET_AGE_HOURS
 
 logger = logging.getLogger(__name__)
 
@@ -37,13 +38,24 @@ class TaskExecutor:
         pages_fetched = 0
         tweets_fetched_raw = 0
 
+        logger.info(
+            "task start | subtask=%s type=%s params=%s watermark=%s",
+            subtask_id, task_type, params, watermark or "-",
+        )
+
         try:
             for page_idx in range(MAX_PAGES_PER_TASK):
                 pages_fetched += 1
+                logger.info(
+                    "task page | subtask=%s page=%d/%d cursor=%s",
+                    subtask_id, pages_fetched, MAX_PAGES_PER_TASK,
+                    "yes" if cursor else "no",
+                )
                 result = await self.scraper.fetch(task_type, params, cursor)
                 tweets = result.get("tweets", []) or []
                 tweets_fetched_raw += len(tweets)
                 hit_watermark = False
+                page_fresh = 0
 
                 for tw in tweets:
                     tid = str(tw.get("tweet_id", ""))
@@ -54,8 +66,25 @@ class TaskExecutor:
                     if tid and not self.dedup.seen(tid):
                         self.dedup.add(tid)
                         all_fresh.append(tw)
+                        page_fresh += 1
+
+                logger.info(
+                    "task page done | subtask=%s page=%d raw=%d fresh=%d watermark_hit=%s",
+                    subtask_id, pages_fetched, len(tweets), page_fresh, hit_watermark,
+                )
 
                 if hit_watermark:
+                    break
+
+                if page_exceeds_max_age(tweets, max_hours=PAGE_MAX_TWEET_AGE_HOURS):
+                    oldest = oldest_tweet_time(tweets)
+                    stopped_reason = "tweet_age_24h"
+                    logger.info(
+                        "task page stale | subtask=%s oldest=%s max_hours=%d",
+                        subtask_id,
+                        oldest.isoformat() if oldest else "-",
+                        PAGE_MAX_TWEET_AGE_HOURS,
+                    )
                     break
 
                 next_cursor = result.get("next_cursor")
@@ -72,7 +101,7 @@ class TaskExecutor:
                     await asyncio.sleep(PAGE_INTERVAL_SEC)
 
         except Exception as e:
-            logger.exception("scrape failed: %s", e)
+            logger.exception("task failed | subtask=%s error=%s", subtask_id, e)
             return {
                 "type": "task_result",
                 "assignment_id": assignment_id,
@@ -83,6 +112,11 @@ class TaskExecutor:
                 "_tweets_fetched_raw": tweets_fetched_raw,
             }
 
+        logger.info(
+            "task done | subtask=%s pages=%d raw=%d fresh=%d reason=%s",
+            subtask_id, pages_fetched, tweets_fetched_raw, len(all_fresh),
+            stopped_reason or "complete",
+        )
         return {
             "type": "task_result",
             "assignment_id": assignment_id,

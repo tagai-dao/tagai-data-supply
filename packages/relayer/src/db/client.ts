@@ -115,6 +115,30 @@ export interface ConsumeInviteResult {
   label?: string | null;
 }
 
+export type InviteCheckReason = 'not_found' | 'used' | 'revoked';
+
+export interface CheckInviteResult {
+  ok: boolean;
+  invite_id?: string;
+  label?: string | null;
+  reason?: InviteCheckReason;
+}
+
+// setup 预检：只读校验 invite，不消费（spec §5.2: status=active AND node_id IS NULL）
+export async function checkInvite(invite_secret: string): Promise<CheckInviteResult> {
+  const h = hashToken(invite_secret);
+  const [rows] = await pool.execute<any[]>(
+    'SELECT invite_id, label, status, node_id FROM `bsc_tds_invite` WHERE invite_secret_hash = ? LIMIT 1',
+    [h],
+  );
+  const invite = rows[0] as Pick<InviteRow, 'invite_id' | 'label' | 'status' | 'node_id'> | undefined;
+  if (!invite) return { ok: false, reason: 'not_found' };
+  if (invite.status === 'revoked') return { ok: false, reason: 'revoked' };
+  if (invite.status === 'used' || invite.node_id) return { ok: false, reason: 'used' };
+  if (invite.status !== 'active') return { ok: false, reason: 'not_found' };
+  return { ok: true, invite_id: invite.invite_id, label: invite.label ?? null };
+}
+
 // spec §10.1: 一次性消费 invite。事务内查 active + 标 used。
 export async function consumeInvite(invite_secret: string): Promise<ConsumeInviteResult> {
   const h = hashToken(invite_secret);

@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from tagai_data_supply.runtime.executor import TaskExecutor
 
 
@@ -8,6 +9,19 @@ class MockScraper:
 
     async def fetch(self, task_type, params, cursor=None):
         return self._result
+
+
+class PagedScraper:
+    def __init__(self, pages: list[dict]):
+        self._pages = pages
+        self._i = 0
+
+    async def fetch(self, task_type, params, cursor=None):
+        if self._i >= len(self._pages):
+            return {"tweets": [], "next_cursor": None, "cookie_status": "ok"}
+        r = self._pages[self._i]
+        self._i += 1
+        return r
 
 
 @pytest.mark.asyncio
@@ -65,3 +79,69 @@ async def test_executor_scraper_error():
     assert r["status"] == "failed"
     assert "boom" in r["error"]
     assert r["cookie_status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_executor_stops_pagination_when_page_tweets_older_than_24h():
+    now = datetime.now(timezone.utc)
+    recent = (now - timedelta(hours=1)).isoformat()
+    old = (now - timedelta(hours=25)).isoformat()
+    scraper = PagedScraper([
+        {
+            "tweets": [{"tweet_id": "1", "content": "new", "tweet_time": recent}],
+            "next_cursor": "c2",
+            "cookie_status": "ok",
+        },
+        {
+            "tweets": [{"tweet_id": "2", "content": "old", "tweet_time": old}],
+            "next_cursor": "c3",
+            "cookie_status": "ok",
+        },
+        {
+            "tweets": [{"tweet_id": "3", "content": "skip", "tweet_time": recent}],
+            "next_cursor": None,
+            "cookie_status": "ok",
+        },
+    ])
+    ex = TaskExecutor(scraper)
+    r = await ex.handle({
+        "assignment_id": "asg_1",
+        "subtask_id": "s1",
+        "task_type": "hashtag",
+        "params": {"q": "#x"},
+        "cursor": None,
+    })
+    assert r["status"] == "done"
+    assert r["pages_fetched"] == 2
+    assert r["stopped_reason"] == "tweet_age_24h"
+    assert len(r["tweets"]) == 2
+    assert scraper._i == 2
+
+
+@pytest.mark.asyncio
+async def test_executor_stops_on_first_page_if_already_stale():
+    now = datetime.now(timezone.utc)
+    old = (now - timedelta(hours=30)).isoformat()
+    scraper = PagedScraper([
+        {
+            "tweets": [{"tweet_id": "1", "content": "old", "tweet_time": old}],
+            "next_cursor": "c2",
+            "cookie_status": "ok",
+        },
+        {
+            "tweets": [{"tweet_id": "2", "content": "never", "tweet_time": old}],
+            "next_cursor": None,
+            "cookie_status": "ok",
+        },
+    ])
+    ex = TaskExecutor(scraper)
+    r = await ex.handle({
+        "assignment_id": "asg_1",
+        "subtask_id": "s1",
+        "task_type": "hashtag",
+        "params": {},
+        "cursor": None,
+    })
+    assert r["pages_fetched"] == 1
+    assert r["stopped_reason"] == "tweet_age_24h"
+    assert scraper._i == 1

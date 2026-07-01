@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../../config';
-import { consumeInvite, createNode, linkInviteNode } from '../../db/client';
+import { checkInvite, consumeInvite, createNode, linkInviteNode } from '../../db/client';
+import { asyncHandler } from '../middleware/asyncHandler';
 import { issueNodeCredentials } from '../../auth/tokens';
 import { verifyTagaiAccount } from '../../tagai/client';
 import { IpRateLimiter } from '../ratelimit';
@@ -17,8 +18,33 @@ export const nodeRoutes = Router();
 
 nodeRoutes.get('/_ping', (_req, res) => res.json({ ok: true }));
 
+const INVITE_INVALID_MESSAGES: Record<string, string> = {
+  not_found: 'invite not found',
+  used: 'invite already used',
+  revoked: 'invite revoked',
+};
+
+// setup 预检：验证邀请码，不消费
+nodeRoutes.post('/verify-invite', asyncHandler(async (req: Request, res: Response) => {
+  const { invite_secret } = req.body ?? {};
+  if (!invite_secret) {
+    res.status(400).json({ c: 1, m: 'invite_secret required' });
+    return;
+  }
+  const checked = await checkInvite(String(invite_secret));
+  if (!checked.ok) {
+    const reason = checked.reason ?? 'not_found';
+    res.status(403).json({ c: 1, m: INVITE_INVALID_MESSAGES[reason] ?? 'invalid invite' });
+    return;
+  }
+  res.json({
+    c: 0,
+    d: { ok: true, invite_id: checked.invite_id, label: checked.label ?? null },
+  });
+}));
+
 // setup 预检：验证收益账号，不消费 invite（仅需 username，类型由 tagai-api 库记录返回）
-nodeRoutes.post('/verify-account', async (req: Request, res: Response) => {
+nodeRoutes.post('/verify-account', asyncHandler(async (req: Request, res: Response) => {
   const { tagai_username } = req.body ?? {};
   if (!tagai_username) {
     res.status(400).json({ c: 1, m: 'tagai_username required' });
@@ -41,10 +67,10 @@ nodeRoutes.post('/verify-account', async (req: Request, res: Response) => {
       account_type: verified.account_type,
     },
   });
-});
+}));
 
 // spec §10.1: 节点注册
-nodeRoutes.post('/register', async (req: Request, res: Response) => {
+nodeRoutes.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const ip = (req.ip || req.socket.remoteAddress || 'unknown').replace(/^::ffff:/, '');
 
   if (!registerLimiter.allow(ip)) {
@@ -109,4 +135,4 @@ nodeRoutes.post('/register', async (req: Request, res: Response) => {
       protocol_version: PROTOCOL_VERSION,
     },
   });
-});
+}));
