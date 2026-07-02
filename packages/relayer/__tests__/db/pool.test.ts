@@ -1,5 +1,10 @@
 jest.mock('mysql2/promise', () => ({
-  createPool: jest.fn(() => ({ end: jest.fn(), execute: jest.fn() })),
+  createPool: jest.fn(() => ({
+    end: jest.fn().mockResolvedValue(undefined),
+    execute: jest.fn(),
+    query: jest.fn(),
+    getConnection: jest.fn(),
+  })),
 }));
 
 describe('db pool', () => {
@@ -25,5 +30,42 @@ describe('db pool', () => {
     const opts = (mysql.createPool as jest.Mock).mock.calls[0][0];
     expect(opts.user).toBe('u');
     expect(opts.host).toBe('h');
+  });
+
+  it('enables tcp keepalive for remote mysql idle disconnects', () => {
+    require('../../src/db/pool');
+    const mysql = require('mysql2/promise');
+    const opts = (mysql.createPool as jest.Mock).mock.calls[0][0];
+    expect(opts.enableKeepAlive).toBe(true);
+    expect(opts.keepAliveInitialDelay).toBe(10_000);
+  });
+
+  it('retries execute on PROTOCOL_CONNECTION_LOST and recreates pool', async () => {
+    const mysql = require('mysql2/promise');
+    const firstPool = {
+      end: jest.fn().mockResolvedValue(undefined),
+      execute: jest.fn()
+        .mockRejectedValueOnce(Object.assign(new Error('Connection lost'), { code: 'PROTOCOL_CONNECTION_LOST', fatal: true }))
+        .mockResolvedValueOnce([{ ok: 1 }, []]),
+      query: jest.fn(),
+      getConnection: jest.fn(),
+    };
+    const secondPool = {
+      end: jest.fn().mockResolvedValue(undefined),
+      execute: jest.fn().mockResolvedValueOnce([{ ok: 1 }, []]),
+      query: jest.fn(),
+      getConnection: jest.fn(),
+    };
+    (mysql.createPool as jest.Mock)
+      .mockReturnValueOnce(firstPool)
+      .mockReturnValueOnce(secondPool);
+
+    const { pool } = require('../../src/db/pool');
+    const [rows] = await pool.execute('SELECT 1');
+    expect(rows).toEqual({ ok: 1 });
+    expect(firstPool.execute).toHaveBeenCalledTimes(1);
+    expect(secondPool.execute).toHaveBeenCalledTimes(1);
+    expect(firstPool.end).toHaveBeenCalled();
+    expect(mysql.createPool).toHaveBeenCalledTimes(2);
   });
 });
