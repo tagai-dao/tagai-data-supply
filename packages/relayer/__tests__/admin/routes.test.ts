@@ -99,14 +99,16 @@ describe('admin API (spec §12)', () => {
   it('GET /admin/stats', async () => {
     (pool.execute as jest.Mock)
       .mockResolvedValueOnce([[{ status: 'online', cnt: 1 }], []])
-      .mockResolvedValueOnce([[{ cnt: 5 }], []])
-      .mockResolvedValueOnce([[{ cnt: 3 }], []])
+      .mockResolvedValueOnce([[{ cnt: 2 }], []])
+      .mockResolvedValueOnce([[{ cnt: 53 }], []])
+      .mockResolvedValueOnce([[{ cnt: 0 }], []])
       .mockResolvedValueOnce([[{ status: 'done', cnt: 2 }], []]);
     const r = await request(app).get('/admin/stats').set('Authorization', ADMIN);
     expect(r.status).toBe(200);
     expect(r.body.d).toHaveProperty('nodes');
-    expect(r.body.d).toHaveProperty('pending_total');
-    expect(r.body.d).toHaveProperty('pending_done');
+    expect(r.body.d.pending_pending).toBe(2);
+    expect(r.body.d.pending_done).toBe(53);
+    expect(r.body.d.pending_failed).toBe(0);
   });
 
   it('GET /admin/logs returns buffered logs with level filter', async () => {

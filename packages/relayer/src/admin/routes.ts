@@ -145,11 +145,14 @@ adminRoutes.get('/stats', asyncHandler(async (_req, res) => {
   const [nodes] = await pool.execute<any[]>(
     "SELECT status, COUNT(*) AS cnt FROM `bsc_tds_node` GROUP BY status",
   );
-  const [pendingTotal] = await pool.execute<any[]>(
-    'SELECT COUNT(*) AS cnt FROM `bsc_tds_pending_tweet`',
+  const [pendingOpen] = await pool.execute<any[]>(
+    "SELECT COUNT(*) AS cnt FROM `bsc_tds_pending_tweet` WHERE status IN (0, 1, 5)",
   );
   const [pendingDone] = await pool.execute<any[]>(
     "SELECT COUNT(*) AS cnt FROM `bsc_tds_pending_tweet` WHERE status = 2",
+  );
+  const [pendingFailed] = await pool.execute<any[]>(
+    "SELECT COUNT(*) AS cnt FROM `bsc_tds_pending_tweet` WHERE status = 3",
   );
   const [assignments] = await pool.execute<any[]>(
     "SELECT status, COUNT(*) AS cnt FROM `bsc_tds_assignment` GROUP BY status",
@@ -158,8 +161,9 @@ adminRoutes.get('/stats', asyncHandler(async (_req, res) => {
     c: 0,
     d: {
       nodes: Object.fromEntries(nodes.map((r: any) => [r.status, r.cnt])),
-      pending_total: pendingTotal[0]?.cnt ?? 0,
+      pending_pending: pendingOpen[0]?.cnt ?? 0,
       pending_done: pendingDone[0]?.cnt ?? 0,
+      pending_failed: pendingFailed[0]?.cnt ?? 0,
       assignments: Object.fromEntries(assignments.map((r: any) => [r.status, r.cnt])),
     },
   });

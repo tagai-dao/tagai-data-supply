@@ -30,7 +30,7 @@ const nodeStatusType = (s: string) =>
       <el-col :span="6" v-for="card in [
         { label: '在线节点', value: stats.nodes?.online || 0 },
         { label: '离线/其他节点', value: (stats.nodes?.offline || 0) + (stats.nodes?.cooldown || 0) + (stats.nodes?.disabled || 0) },
-        { label: '待处理推文', value: stats.pending_total || 0 },
+        { label: '待处理推文', value: stats.pending_pending || 0 },
         { label: '已完成处理', value: stats.pending_done || 0 },
       ]" :key="card.label">
         <el-card shadow="hover">
