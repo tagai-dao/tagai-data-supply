@@ -1,6 +1,7 @@
 import pino from 'pino';
 import { Writable } from 'stream';
 import { formatPinoLogLine } from './logColors';
+import { createLogCaptureStream } from './logBuffer';
 
 function shouldUsePretty(): boolean {
   if (process.env.LOG_FORMAT === 'json') return false;
@@ -30,8 +31,16 @@ function buildPrettyStream(): Writable {
   });
 }
 
-const level = process.env.LOG_LEVEL ?? 'info';
+const stdoutLevel = (process.env.LOG_LEVEL ?? 'info') as pino.Level;
 
-export const logger = shouldUsePretty()
-  ? pino({ level }, buildPrettyStream())
-  : pino({ level });
+// 根 logger 用 trace，使缓冲可收录 debug；终端/文件仍按 LOG_LEVEL 过滤
+export const logger = pino(
+  { level: 'trace' },
+  pino.multistream([
+    { level: 'trace', stream: createLogCaptureStream() },
+    {
+      level: stdoutLevel,
+      stream: shouldUsePretty() ? buildPrettyStream() : process.stdout,
+    },
+  ]),
+);

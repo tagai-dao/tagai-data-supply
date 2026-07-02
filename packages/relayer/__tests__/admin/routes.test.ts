@@ -39,6 +39,8 @@ import { issueInvite } from '../../src/auth/tokens';
 import { createSubtask, validateSubtaskTick } from '../../src/db/tasks';
 import { reclaimNodeAssignments } from '../../src/health/db';
 import { pool } from '../../src/db/pool';
+import { clearLogBuffer } from '../../src/utils/logBuffer';
+import { logger } from '../../src/utils/logger';
 
 const ADMIN = 'Bearer test-admin-token';
 
@@ -105,5 +107,16 @@ describe('admin API (spec §12)', () => {
     expect(r.body.d).toHaveProperty('nodes');
     expect(r.body.d).toHaveProperty('pending_total');
     expect(r.body.d).toHaveProperty('pending_done');
+  });
+
+  it('GET /admin/logs returns buffered logs with level filter', async () => {
+    clearLogBuffer();
+    logger.debug({ node_id: 'n1' }, 'task_decline');
+    logger.info({ subtask_id: 'st1' }, 'task assigned');
+    const r = await request(app).get('/admin/logs').set('Authorization', ADMIN).query({ level: 'debug' });
+    expect(r.status).toBe(200);
+    expect(r.body.d.items.length).toBeGreaterThanOrEqual(1);
+    expect(r.body.d.items.every((i: { level: string }) => i.level === 'debug')).toBe(true);
+    expect(r.body.d.items.some((i: { msg: string }) => i.msg === 'task_decline')).toBe(true);
   });
 });

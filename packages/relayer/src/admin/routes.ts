@@ -10,6 +10,7 @@ import {
 } from '../db/tasks';
 import { reclaimNodeAssignments, reEnableNode } from '../health/db';
 import { listPending, retryPending } from '../db/pending';
+import { queryLogs } from '../utils/logBuffer';
 import { logger } from '../utils/logger';
 import { asyncHandler } from '../server/middleware/asyncHandler';
 
@@ -178,4 +179,17 @@ adminRoutes.get('/pending', asyncHandler(async (req, res) => {
 adminRoutes.post('/pending/:id/retry', asyncHandler(async (req, res) => {
   const ok = await retryPending(Number(req.params.id));
   res.json({ c: 0, d: { id: Number(req.params.id), retried: ok } });
+}));
+
+// ---- 运行日志（内存缓冲，含 debug）----
+adminRoutes.get('/logs', asyncHandler(async (req, res) => {
+  const levelParam = req.query.level;
+  const levels = typeof levelParam === 'string' && levelParam
+    ? levelParam.split(',').map((s) => s.trim()).filter(Boolean)
+    : undefined;
+  const q = typeof req.query.q === 'string' ? req.query.q : undefined;
+  const sinceId = req.query.since_id != null ? Number(req.query.since_id) : 0;
+  const limit = req.query.limit != null ? Number(req.query.limit) : 200;
+  const result = queryLogs({ levels, q, sinceId: Number.isFinite(sinceId) ? sinceId : 0, limit });
+  res.json({ c: 0, d: result });
 }));

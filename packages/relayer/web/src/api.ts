@@ -61,7 +61,20 @@ export const api = {
   // pending 推文处理
   listPending: (status = 3) => http.get('/admin/pending', { params: { status } }).then(unwrap),
   retryPending: (id: number) => http.post(`/admin/pending/${id}/retry`).then(unwrap),
+
+  // 运行日志
+  listLogs: (params?: { level?: string; q?: string; since_id?: number; limit?: number }) =>
+    http.get('/admin/logs', { params }).then(unwrap) as Promise<{ items: LogRecord[]; latestId: number }>,
 };
+
+export interface LogRecord {
+  id: number;
+  time: number;
+  level: string;
+  msg: string;
+  fields: Record<string, unknown>;
+  line: string;
+}
 
 export function setToken(token: string) {
   localStorage.setItem('tds_admin_token', token);
