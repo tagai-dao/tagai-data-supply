@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # tagai-data-supply 节点一键安装：下载/安装 tagai-node 并进入 setup 向导
 # 用法:
-#   curl -fsSL https://raw.githubusercontent.com/<org>/<repo>/main/scripts/install-node.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/scripts/install-node.sh | bash
 #   curl -fsSL .../install-node.sh | bash -s -- --repo https://github.com/org/tagai-data-supply.git
 set -euo pipefail
 
@@ -31,7 +31,7 @@ elif [ -n "$TDS_REPO" ]; then
   INSTALL_SRC="$TMPDIR/repo/packages/node"
 else
   echo "错误: 请设置 TDS_REPO 或在已克隆的 tagai-data-supply 仓库内运行此脚本" >&2
-  echo "示例: TDS_REPO=https://github.com/your-org/tagai-data-supply.git bash install-node.sh" >&2
+  echo "示例: TDS_REPO=https://github.com/tagai-dao/tagai-data-supply.git bash install-node.sh" >&2
   exit 1
 fi
 

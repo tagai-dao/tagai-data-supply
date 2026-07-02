@@ -13,6 +13,7 @@ except ImportError:  # websockets 可选（测试可 mock）
     websockets = None
     ConnectionClosed = Exception
 
+from ..version import get_version
 from .protocol import (
     PROTOCOL_VERSION, Hello, AuthAck, MessageType, CookieStatus,
 )
@@ -112,6 +113,7 @@ class NodeClient:
             cookie_status=self.cookie_status,
             label=self._label,
             tagai_username=self._tagai_username,
+            node_version=get_version(),
         )
         await ws.send(hello.model_dump_json())
         raw = await ws.recv()

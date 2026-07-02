@@ -31,14 +31,26 @@ from .node_logging import (
     tail_log_file, read_pid, is_process_alive, clear_pid,
 )
 from .status_reporter import status_reporter_loop
+from .version import (
+    fetch_relayer_version_info,
+    get_version,
+    major_of,
+    parse_version,
+    version_status,
+)
+from .updater import UpdateError, run_update
 
 logger = logging.getLogger(__name__)
 
 
 @click.group(invoke_without_command=True)
+@click.option("-v", "--version", is_flag=True, help="显示当前版本与 Relayer 最新版本")
 @click.pass_context
-def cli(ctx):
+def cli(ctx, version: bool):
     """tagai-data-supply 抓取节点。"""
+    if version:
+        _print_version(check_latest=True)
+        ctx.exit()
     if ctx.invoked_subcommand is None:
         if load_state() and load_manifest():
             click.echo("节点已配置。使用 `tagai-node status` 查看状态，`tagai-node run` 启动。")
@@ -248,6 +260,45 @@ def logs(follow: bool, lines: int, log_file: str | None):
     tail_log_file(path, lines=lines, follow=follow)
 
 
+@cli.command("version")
+@click.option("--offline", is_flag=True, help="不查询 Relayer 最新版本")
+def version_cmd(offline: bool):
+    """显示当前版本与最新版本。"""
+    _print_version(check_latest=not offline)
+
+
+@cli.command()
+def update():
+    """从 Relayer 拉取最新版并更新（二进制自替换或 pip 升级）。"""
+    http = _relayer_http_base()
+    if not http:
+        raise click.ClickException("未配置 Relayer，请先 `tagai-node setup`")
+    info = fetch_relayer_version_info(http)
+    if not info:
+        raise click.ClickException(f"无法从 Relayer 获取版本信息: {http}/node/version")
+    local = get_version()
+    try:
+        if parse_version(local) >= parse_version(info.latest):
+            click.echo(f"已是最新版本 {local}")
+            return
+    except ValueError:
+        pass
+
+    def _stop_if_running() -> None:
+        pid = read_pid()
+        if pid and is_process_alive(pid):
+            click.echo("正在停止后台节点…")
+            if not stop_daemon():
+                raise click.ClickException("无法停止后台节点，请手动 tagai-node stop 后重试")
+
+    try:
+        old, new = run_update(info, stop_callback=_stop_if_running)
+    except UpdateError as e:
+        raise click.ClickException(str(e)) from e
+    click.echo(f"已更新: {old} → {new}")
+    click.echo("请重新运行: tagai-node run")
+
+
 @cli.command()
 def stop():
     """停止后台运行的节点。"""
@@ -268,6 +319,8 @@ def stop():
 def _run_foreground(*, log_path, status_interval: int, console: bool) -> None:
     """前台运行主循环（可被 daemon 子进程调用）。"""
     setup_node_logging(log_file=log_path, console=console)
+
+    _enforce_node_version_or_exit()
 
     cfg = load_state()
     if not cfg or not cfg.node_token:
@@ -394,6 +447,52 @@ def _make_handler(executor: TaskExecutor, gate: TaskGate, scraper: TwikitScraper
         )
         return result
     return handler
+
+
+def _relayer_http_base() -> str | None:
+    manifest = load_manifest()
+    if manifest and manifest.relayer_http:
+        return manifest.relayer_http.rstrip("/")
+    cfg = load_state()
+    if cfg and cfg.relayer_url:
+        return cfg.relayer_url.replace("ws://", "http://").replace("wss://", "https://").rstrip("/")
+    return None
+
+
+def _print_version(*, check_latest: bool) -> None:
+    local = get_version()
+    click.echo(f"tagai-node {local}")
+    if not check_latest:
+        return
+    http = _relayer_http_base()
+    if not http:
+        click.echo("最新版本: - (未配置 Relayer)")
+        return
+    info = fetch_relayer_version_info(http)
+    if not info:
+        click.echo(f"最新版本: - (无法连接 {http}/node/version)")
+        return
+    click.echo(f"最新版本: {info.latest}")
+    if info.min_major > 0:
+        click.echo(f"最低要求: major >= {info.min_major}")
+    click.echo(f"状态:     {version_status(local, info)}")
+
+
+def _enforce_node_version_or_exit() -> None:
+    http = _relayer_http_base()
+    if not http:
+        return
+    info = fetch_relayer_version_info(http)
+    if not info or info.min_major <= 0:
+        return
+    try:
+        if major_of(get_version()) < info.min_major:
+            raise click.ClickException(
+                f"当前版本 major={major_of(get_version())}，Relayer 要求 major >= {info.min_major}。"
+                f"请执行: tagai-node update"
+            )
+    except ValueError:
+        return
 
 
 def main():

@@ -1,7 +1,9 @@
 [project]
 name = "tagai-data-supply-node"
-version = "0.0.1"
+version = "0.1.0"
 description = "tagai-data-supply 抓取节点（用户自部署）"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
 dependencies = [
     "websockets>=12.0",

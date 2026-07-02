@@ -66,7 +66,7 @@ pm2 start ecosystem.config.cjs
 bash scripts/install-node.sh
 
 # 或指定远程仓库
-TDS_REPO=https://github.com/<org>/tagai-data-supply.git bash scripts/install-node.sh
+TDS_REPO=https://github.com/tagai-dao/tagai-data-supply.git bash scripts/install-node.sh
 ```
 
 安装后自动进入 `tagai-node setup` 向导（收益账号 @用户名 + 抓取用小号 cookie，分开配置）。

@@ -16,6 +16,7 @@ import { ingestTaskResult } from '../ingestion';
 import { applyCookieEvent, reclaimNodeAssignments } from '../health/db';
 import { redispatchSubtask } from '../scheduler/redispatch';
 import { PROTOCOL_VERSION } from '@tds/shared';
+import { isNodeMajorAllowed, nodeReleaseConfig } from '../config/nodeRelease';
 import {
   HEARTBEAT_PING_INTERVAL_SEC,
   NODE_OFFLINE_TIMEOUT_SEC,
@@ -98,6 +99,16 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
           error: `protocol mismatch: server=${config.protocolVersion}`,
         }));
         ws.close(4007, 'protocol mismatch');
+        return;
+      }
+      const nr = nodeReleaseConfig();
+      if (!isNodeMajorAllowed(msg.node_version, nr.minMajor)) {
+        ws.send(JSON.stringify({
+          type: 'auth_ack',
+          ok: false,
+          error: `node version too old: require major >= ${nr.minMajor}`,
+        }));
+        ws.close(4008, 'node version too old');
         return;
       }
       authed = true;

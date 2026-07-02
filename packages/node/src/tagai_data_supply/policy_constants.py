@@ -9,7 +9,7 @@ MIN_COOLDOWN_MINUTES = 3
 MAX_COOLDOWN_MINUTES = 30
 
 # 每日抓取推文上限（API 返回条数累计）
-DAILY_TWEET_LIMIT = 3000
+DAILY_TWEET_LIMIT = 500
 
 # 单次 assignment 翻页（测试阶段暂限 1 页，上线前改回 3）
 MAX_PAGES_PER_TASK = 1

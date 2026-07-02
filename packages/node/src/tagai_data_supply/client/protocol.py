@@ -38,6 +38,7 @@ class Hello(BaseModel):
     cookie_status: CookieStatus = CookieStatus.UNKNOWN
     label: Optional[str] = None
     tagai_username: Optional[str] = None
+    node_version: Optional[str] = None
 
 
 class AuthAck(BaseModel):

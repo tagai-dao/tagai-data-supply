@@ -40,6 +40,20 @@ const GOOD_BODY = {
   tagai_username: 'alice',
 };
 
+describe('GET /node/version', () => {
+  it('returns latest version and download map', async () => {
+    process.env.TDS_NODE_LATEST_VERSION = '1.2.0';
+    process.env.TDS_NODE_MIN_MAJOR = '1';
+    process.env.TDS_NODE_GITHUB_REPO = 'org/tagai-data-supply';
+    const res = await request(app).get('/node/version');
+    expect(res.status).toBe(200);
+    expect(res.body.c).toBe(0);
+    expect(res.body.d.latest).toBe('1.2.0');
+    expect(res.body.d.min_major).toBe(1);
+    expect(res.body.d.download.linux_amd64).toContain('node-v1.2.0');
+  });
+});
+
 describe('POST /node/verify-invite', () => {
   it('400 when invite_secret missing', async () => {
     const res = await request(app).post('/node/verify-invite').send({});

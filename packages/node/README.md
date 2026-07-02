@@ -6,13 +6,37 @@ tagai-data-supply 的抓取节点。
 
 ## 安装
 
-需要 Python ≥ 3.10。抓取依赖 **twikit-ng**（`import twikit` 兼容，修复 2026 年 X 改版）；勿与旧版 `twikit` 混装。
+需要 **Python ≥ 3.10** 仅用于从源码/ pip 安装；**推荐直接使用 GitHub Release 二进制**（无需 Python）。
+
+### 方式 A：二进制（推荐）
+
+从 [GitHub Releases](https://github.com/tagai-dao/tagai-data-supply/releases) 下载对应平台文件，放入 PATH：
+
+```bash
+# 示例：Linux x64
+curl -L -o ~/bin/tagai-node \
+  "https://github.com/tagai-dao/tagai-data-supply/releases/download/node-v0.1.0/tagai-node-linux-amd64"
+chmod +x ~/bin/tagai-node
+export PATH="$HOME/bin:$PATH"
+tagai-node -v
+tagai-node setup
+```
+
+macOS 用 `tagai-node-darwin-arm64`，Windows 用 `tagai-node-windows-amd64.exe`。
+
+更新：`tagai-node update`（会先 stop 再下载替换二进制）。
+
+### 方式 B：源码 / pip（开发者）
+
+抓取依赖 **twikit-ng**（`import twikit` 兼容，修复 2026 年 X 改版）；勿与旧版 `twikit` 混装。
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[scraper]"      # 安装 twikit-ng
 ```
+
+更新：`tagai-node update`（pip 升级）或重新 `pip install -e .`。
 
 验证爬虫与 cookie：
 
@@ -78,6 +102,8 @@ tagai-node stop
 | `logs` | 查看日志（`-f` 跟踪） |
 | `stop` | 停止后台节点 |
 | `status` | 查看当前状态 |
+| `version` / `-v` | 查看当前版本与 Relayer 最新版 |
+| `update` | 更新 CLI（二进制自替换或 pip 升级） |
 
 ## 许可证
 

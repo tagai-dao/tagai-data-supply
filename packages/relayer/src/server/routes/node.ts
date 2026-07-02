@@ -70,6 +70,20 @@ nodeRoutes.post('/verify-account', asyncHandler(async (req: Request, res: Respon
 }));
 
 // spec §10.1: 节点注册
+import { buildNodeDownloadMap, nodeReleaseConfig } from '../../config/nodeRelease';
+
+nodeRoutes.get('/version', (_req, res) => {
+  const cfg = nodeReleaseConfig();
+  res.json({
+    c: 0,
+    d: {
+      latest: cfg.latestVersion,
+      min_major: cfg.minMajor,
+      download: buildNodeDownloadMap(cfg),
+    },
+  });
+});
+
 nodeRoutes.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const ip = (req.ip || req.socket.remoteAddress || 'unknown').replace(/^::ffff:/, '');
 

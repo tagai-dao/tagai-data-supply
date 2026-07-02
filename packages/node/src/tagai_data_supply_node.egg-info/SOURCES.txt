@@ -9,6 +9,7 @@ src/tagai_data_supply/interaction_pool.py
 src/tagai_data_supply/log_colors.py
 src/tagai_data_supply/node_logging.py
 src/tagai_data_supply/node_state.py
+src/tagai_data_supply/platform_detect.py
 src/tagai_data_supply/policy_constants.py
 src/tagai_data_supply/registration.py
 src/tagai_data_supply/runtime_store.py
@@ -18,6 +19,8 @@ src/tagai_data_supply/social_simulator.py
 src/tagai_data_supply/social_state.py
 src/tagai_data_supply/status_reporter.py
 src/tagai_data_supply/task_gate.py
+src/tagai_data_supply/updater.py
+src/tagai_data_supply/version.py
 src/tagai_data_supply/client/__init__.py
 src/tagai_data_supply/client/protocol.py
 src/tagai_data_supply/client/ws.py
@@ -55,4 +58,5 @@ tests/test_tweet_time.py
 tests/test_twikit_compat.py
 tests/test_twikit_pack.py
 tests/test_twitter_api_payload.py
+tests/test_version.py
 tests/test_ws_client.py
