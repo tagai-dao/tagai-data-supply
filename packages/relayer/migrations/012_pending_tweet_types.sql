@@ -1,0 +1,21 @@
+-- pending 支持原推/引用/回复分流（kind=post|reply）
+ALTER TABLE `bsc_tds_pending_tweet`
+  ADD COLUMN `kind` varchar(16) NOT NULL DEFAULT 'post' COMMENT 'post=原推/引用, reply=回复' AFTER `tweet_id`,
+  ADD COLUMN `tweet_type` varchar(16) NOT NULL DEFAULT 'original' COMMENT 'original|quote|reply' AFTER `kind`,
+  ADD COLUMN `retweet_id` varchar(64) DEFAULT NULL AFTER `content`,
+  ADD COLUMN `retweet_info` text DEFAULT NULL AFTER `retweet_id`,
+  ADD COLUMN `conversation_id` varchar(64) DEFAULT NULL AFTER `retweet_info`,
+  ADD COLUMN `parent_tweet_id` varchar(64) DEFAULT NULL AFTER `conversation_id`,
+  ADD COLUMN `parent_twitter_id` varchar(64) DEFAULT NULL AFTER `parent_tweet_id`,
+  ADD COLUMN `parent_twitter_username` varchar(64) DEFAULT NULL AFTER `parent_twitter_id`,
+  ADD COLUMN `parent_twitter_name` varchar(128) DEFAULT NULL AFTER `parent_twitter_username`,
+  ADD COLUMN `parent_profile` varchar(512) DEFAULT NULL AFTER `parent_twitter_name`,
+  ADD COLUMN `parent_followers` int DEFAULT NULL AFTER `parent_profile`,
+  ADD COLUMN `parent_followings` int DEFAULT NULL AFTER `parent_followers`,
+  ADD COLUMN `parent_tweet_count` int DEFAULT NULL AFTER `parent_followings`,
+  ADD COLUMN `parent_like_count` int DEFAULT NULL AFTER `parent_tweet_count`,
+  ADD COLUMN `parent_listed_count` int DEFAULT NULL AFTER `parent_like_count`,
+  ADD COLUMN `parent_verified` tinyint(1) DEFAULT NULL AFTER `parent_listed_count`,
+  ADD COLUMN `parent_content` text DEFAULT NULL AFTER `parent_verified`,
+  ADD COLUMN `parent_raw_payload` text DEFAULT NULL AFTER `parent_content`,
+  ADD COLUMN `parent_tweet_time` datetime DEFAULT NULL AFTER `parent_raw_payload`;

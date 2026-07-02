@@ -11,7 +11,8 @@ from typing import Any, Optional, Protocol
 from .dedup import BoundedSet
 from .tweet_time import oldest_tweet_time, page_exceeds_max_age
 from ..client.protocol import CookieStatus
-from ..policy_constants import MAX_PAGES_PER_TASK, PAGE_INTERVAL_SEC, PAGE_MAX_TWEET_AGE_HOURS
+from ..policy_constants import MAX_PAGES_PER_TASK, PAGE_INTERVAL_SEC, PAGE_MAX_TWEET_AGE_HOURS, MAX_PARENT_FETCHES_PER_TASK
+from ..scraper.parent_resolver import ParentTweetResolver
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,7 @@ def _at_or_below_watermark(tweet_id: str, watermark: str) -> bool:
 
 
 class Scraper(Protocol):
-    async def fetch(self, task_type: str, params: dict, cursor: Optional[str] = None) -> dict:
+    async def fetch(self, task_type: str, params: dict, cursor: Optional[str] = None, parent_resolver: Optional[Any] = None) -> dict:
         ...
 
 
@@ -56,6 +57,10 @@ class TaskExecutor:
             subtask_id, task_type, params, watermark or "-",
         )
 
+        parent_resolver: Optional[ParentTweetResolver] = None
+        if hasattr(self.scraper, "get_tweet_by_id"):
+            parent_resolver = ParentTweetResolver(self.scraper, MAX_PARENT_FETCHES_PER_TASK)
+
         try:
             for page_idx in range(MAX_PAGES_PER_TASK):
                 pages_fetched += 1
@@ -64,7 +69,7 @@ class TaskExecutor:
                     subtask_id, pages_fetched, MAX_PAGES_PER_TASK,
                     "yes" if page_cursor else "no",
                 )
-                result = await self.scraper.fetch(task_type, params, page_cursor)
+                result = await self.scraper.fetch(task_type, params, page_cursor, parent_resolver)
                 tweets = result.get("tweets", []) or []
                 tweets_fetched_raw += len(tweets)
                 hit_watermark = False

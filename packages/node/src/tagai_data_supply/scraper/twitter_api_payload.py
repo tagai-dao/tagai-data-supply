@@ -103,6 +103,33 @@ def _referenced_tweets(tweet: Any) -> list[dict]:
     return refs
 
 
+def pack_quote_retweet_info(tweet: Any) -> tuple[Optional[str], Optional[str]]:
+    """引用帖：retweet_info JSON 字符串（对齐 tiptag importTweets）。"""
+    import json
+
+    quoted = getattr(tweet, "quoted_status", None)
+    quote_id = _str_id(getattr(tweet, "quoted_status_id", None) or getattr(tweet, "quote_tweet_id", None))
+    if quoted is None:
+        return (quote_id or None), None
+
+    q_user = getattr(quoted, "user", None)
+    q_author = pack_twitter_api_user(q_user) if q_user is not None else {}
+    q_text = (getattr(quoted, "text", None) or getattr(quoted, "full_text", None) or "").strip()
+    q_id = _str_id(getattr(quoted, "id", None)) or quote_id
+    info = {
+        "id": q_id,
+        "text": q_text,
+        "createdAt": _iso_time(getattr(quoted, "created_at", None)),
+        "author": {
+            "id": q_author.get("id") or _str_id(getattr(q_user, "id", None) if q_user else None),
+            "name": q_author.get("name"),
+            "username": q_author.get("username"),
+            "profile_image_url": q_author.get("profile_image_url"),
+        },
+    }
+    return q_id or None, json.dumps(info, ensure_ascii=False)
+
+
 def pack_twitter_api_payload(tweet: Any, user: Any = None) -> dict:
     """完整 { data, includes }，可直接 JSON.stringify 写入 all_tweets.content。"""
     user = user if user is not None else getattr(tweet, "user", None)
@@ -134,5 +161,28 @@ def pack_twitter_api_payload(tweet: Any, user: Any = None) -> dict:
     includes: dict[str, Any] = {"users": [], "tweets": []}
     if user is not None:
         includes["users"].append(pack_twitter_api_user(user))
+
+    quoted = getattr(tweet, "quoted_status", None)
+    if quoted is not None:
+        q_user = getattr(quoted, "user", None)
+        q_data = {
+            "id": _str_id(getattr(quoted, "id", None)),
+            "text": (getattr(quoted, "text", None) or getattr(quoted, "full_text", None) or "").strip(),
+            "author_id": _str_id(getattr(q_user, "id", None) if q_user else None),
+            "created_at": _iso_time(getattr(quoted, "created_at", None)),
+        }
+        includes["tweets"].append(q_data)
+        if q_user is not None and not any(u.get("id") == q_data["author_id"] for u in includes["users"]):
+            includes["users"].append(pack_twitter_api_user(q_user))
+
+    embedded_parent = getattr(tweet, "in_reply_to_status", None) or getattr(tweet, "reply_to_status", None)
+    if embedded_parent is not None:
+        p_user = getattr(embedded_parent, "user", None)
+        includes["tweets"].append({
+            "id": _str_id(getattr(embedded_parent, "id", None)),
+            "text": (getattr(embedded_parent, "text", None) or getattr(embedded_parent, "full_text", None) or "").strip(),
+            "author_id": _str_id(getattr(p_user, "id", None) if p_user else None),
+            "created_at": _iso_time(getattr(embedded_parent, "created_at", None)),
+        })
 
     return {"data": data, "includes": includes}

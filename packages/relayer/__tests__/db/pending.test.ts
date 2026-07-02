@@ -7,7 +7,7 @@ jest.mock('../../src/db/pool', () => ({
 }));
 
 import { pool } from '../../src/db/pool';
-import { tweetExistsInBscTweet, insertPendingTweet, buildAllTweetsContent, backupToAllTweets } from '../../src/db/pending';
+import { tweetExistsInBscTweet, insertPendingTweet, buildAllTweetsContent, backupToAllTweets, mapIncomingToPending } from '../../src/db/pending';
 
 beforeAll(() => {
   Object.assign(process.env, {
@@ -35,12 +35,34 @@ describe('pending DAL', () => {
   it('insertPendingTweet: INSERT pending 行', async () => {
     (pool.execute as jest.Mock).mockResolvedValueOnce([{ affectedRows: 1 }, []]);
     await insertPendingTweet({
-      tweet_id: '123', twitter_id: '111', content: 'hi', tweet_time: new Date(),
+      tweet_id: '123', kind: 'post', tweet_type: 'original', twitter_id: '111', content: 'hi', tweet_time: new Date(),
       node_id: 'n1', tagai_account: '111', tagai_account_type: 0,
       topic_id: 't1', subtask_id: 's1', tick: 'SPACEX',
     });
     const sql = (pool.execute as jest.Mock).mock.calls[0][0];
     expect(sql).toContain('INSERT IGNORE INTO `bsc_tds_pending_tweet`');
+    expect(sql).toContain('kind');
+  });
+
+  it('mapIncomingToPending: reply 字段映射', () => {
+    const row = mapIncomingToPending({
+      tweet_id: '200',
+      kind: 'reply',
+      tweet_type: 'reply',
+      twitter_id: '9',
+      content: 'reply text',
+      conversation_id: '100',
+      parent_tweet_id: '100',
+      parent_twitter_id: '8',
+      parent_content: 'parent text',
+      tweet_time: null,
+    }, {
+      node_id: 'n1', tagai_account: '111', tagai_account_type: 0,
+      topic_id: 't1', subtask_id: 's1', tick: 'SPACEX',
+    }, () => new Date('2026-01-01'));
+    expect(row.kind).toBe('reply');
+    expect(row.parent_tweet_id).toBe('100');
+    expect(row.conversation_id).toBe('100');
   });
 
   it('buildAllTweetsContent: 优先 raw_payload（Twitter API v2 JSON）', () => {

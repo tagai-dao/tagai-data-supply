@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from tagai_data_supply.scraper.twikit_scraper import TwikitScraper
 
 
@@ -29,12 +31,14 @@ def test_pack_user_extracts_author_fields():
     assert author["verified"] is True
 
 
-def test_pack_includes_author_on_tweet():
+@pytest.mark.asyncio
+async def test_pack_includes_author_on_tweet():
     scraper = TwikitScraper(ct0="x", auth_token="y")
     tweet = SimpleNamespace(
         id="999",
         text="hello",
         created_at="2026-07-01T00:00:00+00:00",
+        conversation_id="999",
         user=SimpleNamespace(
             id="123",
             name="Bob",
@@ -44,10 +48,10 @@ def test_pack_includes_author_on_tweet():
             friends_count=2,
         ),
     )
-    packed = scraper._pack([tweet])
+    packed = await scraper._pack([tweet])
     tw = packed["tweets"][0]
-    assert tw["twitter_id"] == "123"
+    assert tw["kind"] == "post"
+    assert tw["tweet_type"] == "original"
     assert tw["twitter_username"] == "bob_x"
-    assert tw["twitter_name"] == "Bob"
-    assert "raw_payload" in tw
+    assert tw["twitter_id"] == "123"
     assert tw["raw_payload"]["data"]["text"] == "hello"

@@ -10,7 +10,9 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-from .twitter_api_payload import pack_twitter_api_payload
+from .twitter_api_payload import pack_twitter_api_payload, pack_quote_retweet_info
+from .tweet_classifier import classify_tweet, is_retweet
+from .parent_resolver import ParentTweetResolver
 
 logger = logging.getLogger(__name__)
 
@@ -52,28 +54,36 @@ class TwikitScraper:
         self._client = client
         return client
 
-    async def fetch(self, task_type: str, params: dict, cursor: Optional[str] = None) -> dict:
+    async def fetch(self, task_type: str, params: dict, cursor: Optional[str] = None, parent_resolver: Optional[ParentTweetResolver] = None) -> dict:
+        try:
+            async with self.api_lock:
+                client = await self._ensure_client()
+                if task_type == "hashtag":
+                    res = await self._search_hashtag(client, params, cursor)
+                elif task_type == "user_timeline":
+                    res = await self._user_timeline(client, params, cursor)
+                elif task_type == "keyword":
+                    res = await self._search_keyword(client, params, cursor)
+                else:
+                    return {"tweets": [], "next_cursor": None, "cookie_status": "error"}
+            # _pack 可能补拉父帖，须在 api_lock 外执行避免死锁
+            return await self._pack(res, parent_resolver)
+        except Exception as e:
+            detail = self._format_error(e)
+            logger.warning("twikit fetch failed: %s", detail)
+            return {"tweets": [], "next_cursor": cursor, "cookie_status": self._classify_error(e), "error": detail}
+
+    async def get_tweet_by_id(self, tweet_id: str):
         async with self.api_lock:
             client = await self._ensure_client()
-            try:
-                if task_type == "hashtag":
-                    return await self._search_hashtag(client, params, cursor)
-                if task_type == "user_timeline":
-                    return await self._user_timeline(client, params, cursor)
-                if task_type == "keyword":
-                    return await self._search_keyword(client, params, cursor)
-                return {"tweets": [], "next_cursor": None, "cookie_status": "error"}
-            except Exception as e:
-                detail = self._format_error(e)
-                logger.warning("twikit fetch failed: %s", detail)
-                return {"tweets": [], "next_cursor": cursor, "cookie_status": self._classify_error(e), "error": detail}
+            return await client.get_tweet_by_id(tweet_id)
 
     async def fetch_home_timeline(self, limit: int = 20) -> dict:
         async with self.api_lock:
             try:
                 client = await self._ensure_client()
                 res = await self._call_home_timeline(client, limit)
-                return self._pack(res)
+                return await self._pack(res, None)
             except Exception as e:
                 detail = self._format_error(e)
                 logger.warning("home timeline failed: %s", detail)
@@ -146,19 +156,16 @@ class TwikitScraper:
 
     async def _search_hashtag(self, client, params, cursor):
         q = params.get("q", "")
-        res = await client.search_tweet(q, product="Latest", cursor=cursor)
-        return self._pack(res)
+        return await client.search_tweet(q, product="Latest", cursor=cursor)
 
     async def _search_keyword(self, client, params, cursor):
         q = params.get("q", "")
-        res = await client.search_tweet(q, product="Latest", cursor=cursor)
-        return self._pack(res)
+        return await client.search_tweet(q, product="Latest", cursor=cursor)
 
     async def _user_timeline(self, client, params, cursor):
         username = params.get("username", "")
         user = await client.get_user_by_screen_name(username)
-        res = await client.get_tweets(user.id, cursor=cursor)
-        return self._pack(res)
+        return await client.get_tweets(user.id, cursor=cursor)
 
     def _pack_user(self, user) -> dict:
         """从 twikit User 提取 account 表所需字段（对齐 tiptag newUser）。"""
@@ -202,9 +209,61 @@ class TwikitScraper:
             "verified": verified,
         }
 
-    def _pack(self, res) -> dict:
+    async def _pack_single(self, t, parent_resolver: Optional[ParentTweetResolver]) -> Optional[dict]:
+        if is_retweet(t):
+            return None
+
+        tweet_type = classify_tweet(t)
+        if tweet_type == "retweet":
+            return None
+
+        user = getattr(t, "user", None)
+        author = self._pack_user(user)
+        tweet_id = getattr(t, "id", None)
+        content = getattr(t, "text", "") or getattr(t, "full_text", "")
+        conversation_id = (
+            getattr(t, "conversation_id", None)
+            or getattr(t, "in_reply_to_status_id", None)
+            or tweet_id
+        )
+
+        base = {
+            "tweet_id": tweet_id,
+            "twitter_id": getattr(user, "id", None),
+            "content": content,
+            "raw_payload": pack_twitter_api_payload(t, user),
+            "tweet_time": getattr(t, "created_at", None),
+            "conversation_id": conversation_id,
+            "tags": None,
+            "video_link": None,
+            **author,
+        }
+
+        if tweet_type == "reply":
+            if parent_resolver is None:
+                return None
+            parent = await parent_resolver.resolve(t)
+            if parent is None:
+                logger.debug("reply skipped, parent unavailable tweet_id=%s", tweet_id)
+                return None
+            return {
+                **base,
+                "kind": "reply",
+                "tweet_type": "reply",
+                **parent,
+            }
+
+        retweet_id, retweet_info = pack_quote_retweet_info(t) if tweet_type == "quote" else (None, None)
+        return {
+            **base,
+            "kind": "post",
+            "tweet_type": tweet_type,
+            "retweet_id": retweet_id,
+            "retweet_info": retweet_info,
+        }
+
+    async def _pack(self, res, parent_resolver: Optional[ParentTweetResolver] = None) -> dict:
         tweets = []
-        # twikit 2.x 返回 Result（可迭代），旧代码只读 .tweets 会得到空列表
         if isinstance(res, list):
             raw_tweets = res
         elif hasattr(res, "__iter__") and not isinstance(res, (str, bytes, dict)):
@@ -212,18 +271,8 @@ class TwikitScraper:
         else:
             raw_tweets = getattr(res, "tweets", None) or []
         for t in raw_tweets:
-            user = getattr(t, "user", None)
-            author = self._pack_user(user)
-            tweets.append({
-                "tweet_id": getattr(t, "id", None),
-                "twitter_id": getattr(user, "id", None),
-                # pending / bsc_tweet 用纯文本；all_tweets 用 raw_payload（Twitter API v2 形态）
-                "content": getattr(t, "text", "") or getattr(t, "full_text", ""),
-                "raw_payload": pack_twitter_api_payload(t, user),
-                "tweet_time": getattr(t, "created_at", None),
-                "tags": None,
-                "video_link": None,
-                **author,
-            })
+            packed = await self._pack_single(t, parent_resolver)
+            if packed is not None:
+                tweets.append(packed)
         next_cursor = getattr(res, "next_cursor", None) if not isinstance(res, list) else None
         return {"tweets": tweets, "next_cursor": next_cursor, "cookie_status": "ok"}

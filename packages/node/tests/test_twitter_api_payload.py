@@ -1,4 +1,5 @@
 import json
+import pytest
 from types import SimpleNamespace
 
 from tagai_data_supply.scraper.twitter_api_payload import (
@@ -71,7 +72,8 @@ def test_pack_twitter_api_payload_reply_shape():
     assert author["username"] == "fenghuangha"
 
 
-def test_pack_includes_raw_payload_on_tweet():
+@pytest.mark.asyncio
+async def test_pack_includes_raw_payload_on_tweet():
     scraper = TwikitScraper(ct0="x", auth_token="y")
     tweet = SimpleNamespace(
         id="999",
@@ -87,7 +89,7 @@ def test_pack_includes_raw_payload_on_tweet():
             friends_count=2,
         ),
     )
-    packed = scraper._pack([tweet])
+    packed = await scraper._pack([tweet])
     tw = packed["tweets"][0]
     assert tw["content"] == "hello"
     assert tw["raw_payload"]["data"]["text"] == "hello"

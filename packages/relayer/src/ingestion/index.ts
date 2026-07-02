@@ -7,7 +7,7 @@ import {
   getSubtask, setAssignmentStatus, addAssignmentAcceptedCount,
   updateSubtaskWatermark,
 } from '../db/tasks';
-import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets, buildAllTweetsContent } from '../db/pending';
+import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets, buildAllTweetsContent, mapIncomingToPending } from '../db/pending';
 import { NO_TICK_SENTINEL, ASSIGNMENT_MAX_TWEETS } from '../config/constants';
 import { logger } from '../utils/logger';
 
@@ -63,13 +63,14 @@ function toOptionalBool(v: unknown): boolean | null {
   return null;
 }
 
-function toTweetTime(t: IncomingTweet['tweet_time']): Date | string {
+function toTweetTime(t: unknown): Date | string {
   if (t == null) return new Date();
   if (typeof t === 'number') {
     // 秒 or 毫秒
     return t > 1e12 ? new Date(t) : new Date(t * 1000);
   }
-  return t;
+  if (typeof t === 'string') return t;
+  return new Date();
 }
 
 export interface IngestResult {
@@ -111,27 +112,15 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
       if (await tweetExistsInBscTweet(tw.tweet_id)) { deduped++; continue; }
 
       // 写 pending 表 + all_tweets 备份
-      const inserted = await insertPendingTweet({
-        tweet_id: tw.tweet_id,
-        twitter_id: String(tw.twitter_id ?? ''),
-        twitter_username: tw.twitter_username != null ? String(tw.twitter_username) : null,
-        twitter_name: tw.twitter_name != null ? String(tw.twitter_name) : null,
-        profile: tw.profile != null ? String(tw.profile) : null,
-        followers: toOptionalInt(tw.followers),
-        followings: toOptionalInt(tw.followings),
-        tweet_count: toOptionalInt(tw.tweet_count),
-        like_count: toOptionalInt(tw.like_count),
-        listed_count: toOptionalInt(tw.listed_count),
-        verified: toOptionalBool(tw.verified),
-        content: String(tw.content ?? ''),
-        tweet_time: toTweetTime(tw.tweet_time),
+      const pendingRow = mapIncomingToPending(tw, {
         node_id: input.node_id,
         tagai_account: tagaiAccount,
         tagai_account_type: tagaiAccountType,
         topic_id: subtask.topic_id ?? null,
         subtask_id: input.subtask_id,
         tick,
-      });
+      }, toTweetTime);
+      const inserted = await insertPendingTweet(pendingRow);
       if (inserted) {
         promoted++;
         await backupToAllTweets(tw.tweet_id, buildAllTweetsContent(tw));

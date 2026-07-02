@@ -16,6 +16,8 @@ MAX_PAGES_PER_TASK = 3
 PAGE_INTERVAL_SEC = 3
 # 本页最远推文早于该小时数则停止翻页
 PAGE_MAX_TWEET_AGE_HOURS = 24
+# 单任务内回复父帖 get_tweet_by_id 补拉上限
+MAX_PARENT_FETCHES_PER_TASK = 5
 
 # 养号模拟（SocialSimulator）
 POST_INTERVAL_HOURS = 30

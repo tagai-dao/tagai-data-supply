@@ -37,6 +37,7 @@ jest.mock('../../src/db/pending', () => ({
   insertPendingTweet: jest.fn(),
   backupToAllTweets: jest.fn(),
   buildAllTweetsContent: jest.requireActual('../../src/db/pending').buildAllTweetsContent,
+  mapIncomingToPending: jest.requireActual('../../src/db/pending').mapIncomingToPending,
 }));
 
 import { ingestTaskResult } from '../../src/ingestion';

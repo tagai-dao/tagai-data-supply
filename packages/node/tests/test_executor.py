@@ -7,7 +7,7 @@ class MockScraper:
     def __init__(self, result: dict):
         self._result = result
 
-    async def fetch(self, task_type, params, cursor=None):
+    async def fetch(self, task_type, params, cursor=None, parent_resolver=None):
         return self._result
 
 
@@ -17,7 +17,7 @@ class PagedScraper:
         self._i = 0
         self.cursors: list[str | None] = []
 
-    async def fetch(self, task_type, params, cursor=None):
+    async def fetch(self, task_type, params, cursor=None, parent_resolver=None):
         self.cursors.append(cursor)
         if self._i >= len(self._pages):
             return {"tweets": [], "next_cursor": None, "cookie_status": "ok"}
