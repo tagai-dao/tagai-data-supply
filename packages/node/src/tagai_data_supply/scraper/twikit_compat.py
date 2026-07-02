@@ -1,13 +1,16 @@
-"""twikit 兼容补丁：X 改版后 2.3.3 的 ClientTransaction 正则失效（github.com/d60/twikit/issues/408）。
+"""twikit 兼容补丁：X 改版后内部 API 字段迁移（transaction 正则、User core 字段等）。
 
-在 `from twikit import Client` 之前调用 apply_twikit_transaction_patch()。
+在 `from twikit import Client` 之前调用 apply_twikit_patches()。
 上游修复合并后可移除此模块。
 """
 from __future__ import annotations
 
 import re
+from typing import Any, Callable
 
 _PATCHED = False
+_USER_CORE_PATCHED = False
+_ORIG_USER_INIT: Callable[..., None] | None = None
 
 # 新版 webpack chunk 格式（2026-03 起）
 _ON_DEMAND_FILE_REGEX = re.compile(
@@ -88,6 +91,56 @@ def apply_twikit_transaction_patch() -> None:
     tx_mod.INDICES_REGEX = _INDICES_REGEX
     tx_mod.ClientTransaction.get_indices = _patched_get_indices
     _PATCHED = True
+
+
+def _fill_user_core_fields(user: Any, data: dict) -> None:
+    """X 2026 起 name/screen_name 常在 core，头像在 avatar.image_url。"""
+    core = data.get("core") or {}
+    legacy = data.get("legacy") or {}
+    avatar = data.get("avatar") or {}
+
+    if not str(getattr(user, "name", "") or "").strip():
+        user.name = (core.get("name") or legacy.get("name") or "").strip()
+    if not str(getattr(user, "screen_name", "") or "").strip():
+        user.screen_name = (core.get("screen_name") or legacy.get("screen_name") or "").strip()
+    if not str(getattr(user, "profile_image_url", "") or "").strip():
+        user.profile_image_url = (
+            legacy.get("profile_image_url_https")
+            or legacy.get("profile_image_url")
+            or avatar.get("image_url")
+            or ""
+        ).strip()
+    if not str(getattr(user, "created_at", "") or "").strip():
+        user.created_at = (core.get("created_at") or legacy.get("created_at") or "").strip()
+
+
+def apply_twikit_user_core_patch() -> None:
+    """twikit-ng 仍只读 legacy；搜索时间线作者字段为空时从 core 回填。"""
+    global _USER_CORE_PATCHED, _ORIG_USER_INIT
+    if _USER_CORE_PATCHED:
+        return
+    try:
+        from twikit.user import User
+    except ImportError:
+        return
+
+    if _ORIG_USER_INIT is None:
+        _ORIG_USER_INIT = User.__init__
+
+    def _patched_user_init(self, client, data: dict) -> None:
+        assert _ORIG_USER_INIT is not None
+        _ORIG_USER_INIT(self, client, data)
+        self._data = data
+        _fill_user_core_fields(self, data)
+
+    User.__init__ = _patched_user_init  # type: ignore[method-assign]
+    _USER_CORE_PATCHED = True
+
+
+def apply_twikit_patches() -> None:
+    """应用全部 twikit 兼容补丁（幂等）。"""
+    apply_twikit_transaction_patch()
+    apply_twikit_user_core_patch()
 
 
 def scraper_install_hint() -> str:

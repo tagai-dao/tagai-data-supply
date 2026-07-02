@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any, Optional
 
-from .twitter_api_payload import pack_twitter_api_payload, pack_quote_retweet_info
+from .twitter_api_payload import pack_twitter_api_payload, pack_quote_retweet_info, resolve_user_display_fields
 from .tweet_classifier import classify_tweet, is_retweet
 from .parent_resolver import ParentTweetResolver
 
@@ -30,7 +30,7 @@ class TwikitScraper:
         if self._client is not None:
             return self._client
         import importlib.util
-        from ..scraper.twikit_compat import apply_twikit_transaction_patch, scraper_install_hint
+        from ..scraper.twikit_compat import apply_twikit_patches, scraper_install_hint
 
         if importlib.util.find_spec("twikit") is None:
             raise RuntimeError(
@@ -47,8 +47,8 @@ class TwikitScraper:
             raise RuntimeError(
                 f"无法加载 twikit.Client。请执行: {scraper_install_hint()}"
             ) from e
-        # 补丁须在 import Client 之后、首次请求之前（仅 legacy twikit 2.3.x 需要）
-        apply_twikit_transaction_patch()
+        # 补丁须在 import Client 之后、首次请求之前
+        apply_twikit_patches()
         client = Client("en-US")
         client.set_cookies({"ct0": self.ct0, "auth_token": self.auth_token})
         self._client = client
@@ -183,24 +183,15 @@ class TwikitScraper:
                     continue
             return 0
 
-        username = (
-            getattr(user, "screen_name", None)
-            or getattr(user, "username", None)
-            or ""
-        )
-        profile = (
-            getattr(user, "profile_image_url_https", None)
-            or getattr(user, "profile_image_url", None)
-            or ""
-        )
+        display = resolve_user_display_fields(user)
         verified = bool(
             getattr(user, "is_blue_verified", False)
             or getattr(user, "verified", False)
         )
         return {
-            "twitter_username": str(username).strip(),
-            "twitter_name": (getattr(user, "name", None) or "").strip(),
-            "profile": str(profile).strip(),
+            "twitter_username": display["username"],
+            "twitter_name": display["name"],
+            "profile": display["profile_image_url"],
             "followers": _int("followers_count"),
             "followings": _int("following_count", "friends_count"),
             "tweet_count": _int("statuses_count"),

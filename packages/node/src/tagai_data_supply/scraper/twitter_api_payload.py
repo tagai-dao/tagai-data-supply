@@ -29,6 +29,49 @@ def _iso_time(val: Any) -> Optional[str]:
     return s
 
 
+def _user_raw_data(user: Any) -> dict:
+    raw = getattr(user, "_data", None)
+    return raw if isinstance(raw, dict) else {}
+
+
+def resolve_user_display_fields(user: Any) -> dict[str, str]:
+    """解析作者展示字段；兼容 X 将 name/screen_name 迁至 core 的改版。"""
+    username = (
+        getattr(user, "screen_name", None)
+        or getattr(user, "username", None)
+        or ""
+    )
+    name = getattr(user, "name", None) or ""
+    profile = (
+        getattr(user, "profile_image_url_https", None)
+        or getattr(user, "profile_image_url", None)
+        or ""
+    )
+
+    if not str(username).strip() or not str(name).strip() or not str(profile).strip():
+        raw = _user_raw_data(user)
+        core = raw.get("core") or {}
+        legacy = raw.get("legacy") or {}
+        avatar = raw.get("avatar") or {}
+        if not str(username).strip():
+            username = core.get("screen_name") or legacy.get("screen_name") or ""
+        if not str(name).strip():
+            name = core.get("name") or legacy.get("name") or ""
+        if not str(profile).strip():
+            profile = (
+                legacy.get("profile_image_url_https")
+                or legacy.get("profile_image_url")
+                or avatar.get("image_url")
+                or ""
+            )
+
+    return {
+        "username": str(username).strip(),
+        "name": str(name).strip(),
+        "profile_image_url": str(profile).strip(),
+    }
+
+
 def _int_metric(user: Any, *names: str) -> int:
     for name in names:
         val = getattr(user, name, None)
@@ -43,26 +86,17 @@ def _int_metric(user: Any, *names: str) -> int:
 
 def pack_twitter_api_user(user: Any) -> dict:
     """includes.users 条目，对齐 Twitter API v2 User 对象。"""
-    username = (
-        getattr(user, "screen_name", None)
-        or getattr(user, "username", None)
-        or ""
-    )
-    profile = (
-        getattr(user, "profile_image_url_https", None)
-        or getattr(user, "profile_image_url", None)
-        or ""
-    )
+    display = resolve_user_display_fields(user)
     verified = bool(
         getattr(user, "is_blue_verified", False)
         or getattr(user, "verified", False)
     )
     return {
         "id": _str_id(getattr(user, "id", None)),
-        "name": (getattr(user, "name", None) or "").strip(),
-        "username": str(username).strip(),
+        "name": display["name"],
+        "username": display["username"],
         "created_at": _iso_time(getattr(user, "created_at", None)),
-        "profile_image_url": str(profile).strip(),
+        "profile_image_url": display["profile_image_url"],
         "public_metrics": {
             "followers_count": _int_metric(user, "followers_count"),
             "following_count": _int_metric(user, "following_count", "friends_count"),

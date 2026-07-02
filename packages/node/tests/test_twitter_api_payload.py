@@ -5,8 +5,29 @@ from types import SimpleNamespace
 from tagai_data_supply.scraper.twitter_api_payload import (
     pack_twitter_api_payload,
     pack_twitter_api_user,
+    resolve_user_display_fields,
 )
 from tagai_data_supply.scraper.twikit_scraper import TwikitScraper
+
+
+def test_resolve_user_display_fields_from_core_block():
+    """X 2026：legacy 无 name/screen_name，改在 core 子对象。"""
+    user = SimpleNamespace(
+        id="1879511493592391680",
+        name="",
+        screen_name="",
+        profile_image_url="",
+        _data={
+            "rest_id": "1879511493592391680",
+            "legacy": {"followers_count": 10},
+            "core": {"name": "BitCoinWithSteve", "screen_name": "stevemcgarvie"},
+            "avatar": {"image_url": "https://pbs.twimg.com/profile_images/x_normal.jpg"},
+        },
+    )
+    fields = resolve_user_display_fields(user)
+    assert fields["username"] == "stevemcgarvie"
+    assert fields["name"] == "BitCoinWithSteve"
+    assert fields["profile_image_url"].endswith("_normal.jpg")
 
 
 def test_pack_twitter_api_user():
