@@ -10,6 +10,15 @@ export async function tweetExistsInBscTweet(tweet_id: string): Promise<boolean> 
   return rows.length > 0;
 }
 
+// reply 已在 bsc_relation_reply（reply_id = 推文 id）→ 无需再进 pending
+export async function replyExistsInBscRelationReply(reply_id: string): Promise<boolean> {
+  const [rows] = await pool.execute<any[]>(
+    'SELECT 1 FROM `bsc_relation_reply` WHERE reply_id = ? LIMIT 1',
+    [reply_id],
+  );
+  return rows.length > 0;
+}
+
 export interface PendingTweet {
   tweet_id: string;
   kind?: 'post' | 'reply';

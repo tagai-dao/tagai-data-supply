@@ -7,7 +7,7 @@ jest.mock('../../src/db/pool', () => ({
 }));
 
 import { pool } from '../../src/db/pool';
-import { tweetExistsInBscTweet, insertPendingTweet, buildAllTweetsContent, backupToAllTweets, mapIncomingToPending } from '../../src/db/pending';
+import { tweetExistsInBscTweet, replyExistsInBscRelationReply, insertPendingTweet, buildAllTweetsContent, backupToAllTweets, mapIncomingToPending } from '../../src/db/pending';
 
 beforeAll(() => {
   Object.assign(process.env, {
@@ -29,6 +29,22 @@ describe('pending DAL', () => {
   it('tweetExistsInBscTweet: 空结果返回 false', async () => {
     (pool.execute as jest.Mock).mockResolvedValueOnce([[], []]);
     const ok = await tweetExistsInBscTweet('123');
+    expect(ok).toBe(false);
+  });
+
+  it('replyExistsInBscRelationReply: SELECT 1 返回 true', async () => {
+    (pool.execute as jest.Mock).mockResolvedValueOnce([[{ '1': 1 }], []]);
+    const ok = await replyExistsInBscRelationReply('456');
+    expect(ok).toBe(true);
+    expect(pool.execute).toHaveBeenCalledWith(
+      'SELECT 1 FROM `bsc_relation_reply` WHERE reply_id = ? LIMIT 1',
+      ['456'],
+    );
+  });
+
+  it('replyExistsInBscRelationReply: 空结果返回 false', async () => {
+    (pool.execute as jest.Mock).mockResolvedValueOnce([[], []]);
+    const ok = await replyExistsInBscRelationReply('456');
     expect(ok).toBe(false);
   });
 

@@ -34,6 +34,7 @@ jest.mock('../../src/db/tasks', () => ({
 }));
 jest.mock('../../src/db/pending', () => ({
   tweetExistsInBscTweet: jest.fn(),
+  replyExistsInBscRelationReply: jest.fn(),
   insertPendingTweet: jest.fn(),
   backupToAllTweets: jest.fn(),
   buildAllTweetsContent: jest.requireActual('../../src/db/pending').buildAllTweetsContent,
@@ -43,7 +44,7 @@ jest.mock('../../src/db/pending', () => ({
 import { ingestTaskResult } from '../../src/ingestion';
 import { insertTweet, findNodeById } from '../../src/db/client';
 import { getSubtask, updateSubtaskWatermark } from '../../src/db/tasks';
-import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets } from '../../src/db/pending';
+import { tweetExistsInBscTweet, replyExistsInBscRelationReply, insertPendingTweet, backupToAllTweets } from '../../src/db/pending';
 
 beforeAll(() => {
   Object.assign(process.env, {
@@ -52,7 +53,10 @@ beforeAll(() => {
   });
 });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  (replyExistsInBscRelationReply as jest.Mock).mockResolvedValue(false);
+});
 
 describe('ingestTaskResult (spec §4.2)', () => {
   it('推文已在 bsc_tweet → 跳过，deduped++', async () => {
@@ -66,6 +70,24 @@ describe('ingestTaskResult (spec §4.2)', () => {
     expect(r.deduped).toBe(1);
     expect(insertPendingTweet).not.toHaveBeenCalled();
     expect(insertTweet).not.toHaveBeenCalled();
+  });
+
+  it('reply 已在 bsc_relation_reply → 跳过 pending，deduped++', async () => {
+    (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX', topic_id: 't1' });
+    (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
+    (replyExistsInBscRelationReply as jest.Mock).mockResolvedValue(true);
+    const r = await ingestTaskResult({
+      subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
+      tweets: [{
+        tweet_id: '1800000000000000006', twitter_id: '9', content: 'reply', tweet_time: null,
+        kind: 'reply', tweet_type: 'reply', conversation_id: '1800000000000000001', parent_tweet_id: '1800000000000000001',
+      }],
+    });
+    expect(r.deduped).toBe(1);
+    expect(replyExistsInBscRelationReply).toHaveBeenCalledWith('1800000000000000006');
+    expect(tweetExistsInBscTweet).not.toHaveBeenCalled();
+    expect(insertPendingTweet).not.toHaveBeenCalled();
+    expect(backupToAllTweets).not.toHaveBeenCalled();
   });
 
   it('insertPendingTweet 返回 false（UNIQUE 重复）→ deduped++', async () => {

@@ -7,7 +7,10 @@ import {
   getSubtask, setAssignmentStatus, addAssignmentAcceptedCount,
   updateSubtaskWatermark,
 } from '../db/tasks';
-import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets, buildAllTweetsContent, mapIncomingToPending } from '../db/pending';
+import {
+  tweetExistsInBscTweet, replyExistsInBscRelationReply,
+  insertPendingTweet, backupToAllTweets, buildAllTweetsContent, mapIncomingToPending,
+} from '../db/pending';
 import { NO_TICK_SENTINEL, ASSIGNMENT_MAX_TWEETS } from '../config/constants';
 import { logger } from '../utils/logger';
 
@@ -63,6 +66,10 @@ function toOptionalBool(v: unknown): boolean | null {
   return null;
 }
 
+function isIncomingReply(tw: IncomingTweet): boolean {
+  return tw.kind === 'reply' || tw.tweet_type === 'reply';
+}
+
 function toTweetTime(t: unknown): Date | string {
   if (t == null) return new Date();
   if (typeof t === 'number') {
@@ -108,7 +115,13 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
         continue;
       }
 
-      // spec §4.2: 先查 bsc_tweet 是否已存在
+      // reply 已在 relation_reply → 跳过 pending 及后续策展
+      if (isIncomingReply(tw) && await replyExistsInBscRelationReply(tw.tweet_id)) {
+        deduped++;
+        continue;
+      }
+
+      // spec §4.2: 先查 bsc_tweet 是否已存在（原推/引用）
       if (await tweetExistsInBscTweet(tw.tweet_id)) { deduped++; continue; }
 
       // 写 pending 表 + all_tweets 备份
