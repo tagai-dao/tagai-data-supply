@@ -92,6 +92,51 @@ async def test_backoff_grows_and_caps():
 
 
 @pytest.mark.asyncio
+async def test_task_declined_logs_reason_and_recover(caplog):
+    import logging
+    caplog.set_level(logging.INFO)
+
+    class DeclineGate:
+        def check_accept(self):
+            return False, "min_interval", 125
+
+        def set_busy(self, _busy):
+            pass
+
+    task_msg = json.dumps({
+        "type": "task_assign", "assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag",
+        "params": {},
+    })
+    fake = FakeWS([_auth_ack(), task_msg])
+
+    async def should_not_run(msg):
+        raise AssertionError("declined task should not run")
+
+    client = NodeClient(
+        relayer_url="ws://x", node_token="tok",
+        timezone="UTC", cookie_status=CookieStatus.OK,
+        on_task=should_not_run,
+        task_gate=DeclineGate(),
+        ws_factory=lambda url: asyncio.sleep(0, result=fake),
+    )
+    client.HEARTBEAT_INTERVAL = 100
+
+    async def stop_soon():
+        await asyncio.sleep(0.2)
+        client.stop()
+
+    asyncio.create_task(stop_soon())
+    await client.run()
+
+    declined = [r for r in caplog.records if "task declined" in r.message]
+    assert len(declined) == 1
+    assert "reason=min_interval" in declined[0].message
+    assert "recover_in=2m5s" in declined[0].message
+    sent = [json.loads(s) for s in fake.sent]
+    assert any(m.get("type") == "task_decline" and m.get("reason") == "min_interval" for m in sent)
+
+
+@pytest.mark.asyncio
 async def test_task_handler_invoked(monkeypatch):
     task_msg = json.dumps({
         "type": "task_assign", "assignment_id": "asg_1", "subtask_id": "s1", "task_type": "hashtag",

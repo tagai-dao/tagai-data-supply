@@ -16,6 +16,7 @@ except ImportError:  # websockets 可选（测试可 mock）
 from .protocol import (
     PROTOCOL_VERSION, Hello, AuthAck, MessageType, CookieStatus,
 )
+from ..task_gate import format_decline_recovery
 
 logger = logging.getLogger(__name__)
 
@@ -148,19 +149,21 @@ class NodeClient:
                 "task received | subtask=%s assignment=%s type=%s",
                 subtask_id, assignment_id, task_type,
             )
-            ok, reason = (True, None)
+            ok, reason, recover_in_sec = (True, None, None)
             if self._task_gate is not None:
-                ok, reason = self._task_gate.check_accept()
+                ok, reason, recover_in_sec = self._task_gate.check_accept()
             if not ok:
+                decline_reason = reason or "busy"
+                recover_text = format_decline_recovery(decline_reason, recover_in_sec)
                 logger.info(
-                    "task declined | subtask=%s reason=%s",
-                    subtask_id, reason or "busy",
+                    "task declined | subtask=%s reason=%s recover_in=%s",
+                    subtask_id, decline_reason, recover_text,
                 )
                 await ws.send(json.dumps({
                     "type": MessageType.TASK_DECLINE.value,
                     "assignment_id": assignment_id,
                     "subtask_id": subtask_id,
-                    "reason": reason or "busy",
+                    "reason": decline_reason,
                 }))
                 return
             if self._task_gate is not None:

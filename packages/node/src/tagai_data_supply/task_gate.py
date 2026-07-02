@@ -15,6 +15,32 @@ from .runtime_store import RUNTIME_DIR, ensure_config_dir
 SCHEDULER_STATE_FILE = RUNTIME_DIR / "scheduler_state.json"
 
 
+def format_recover_duration(seconds: int) -> str:
+    """将剩余秒数格式化为人类可读时长。"""
+    seconds = max(0, int(seconds))
+    if seconds >= 3600:
+        h, rem = divmod(seconds, 3600)
+        m, s = divmod(rem, 60)
+        if s:
+            return f"{h}h{m}m{s}s"
+        if m:
+            return f"{h}h{m}m"
+        return f"{h}h"
+    if seconds >= 60:
+        m, s = divmod(seconds, 60)
+        return f"{m}m{s}s" if s else f"{m}m"
+    return f"{seconds}s"
+
+
+def format_decline_recovery(reason: Optional[str], recover_in_sec: Optional[int]) -> str:
+    """拒绝日志中的恢复剩余时间描述。"""
+    if reason == "busy":
+        return "after_current_task"
+    if recover_in_sec is None:
+        return "-"
+    return format_recover_duration(recover_in_sec)
+
+
 class TaskGate:
     """任务接收策略（静默拒绝，不扣 Relayer health）。"""
 
@@ -60,27 +86,43 @@ class TaskGate:
             st["daily_date"] = today
             st["daily_tweet_count"] = 0
 
-    def check_accept(self) -> Tuple[bool, Optional[str]]:
-        """是否可接受新任务。返回 (ok, decline_reason)。"""
+    def _seconds_until_iso(self, iso: str) -> int:
+        try:
+            na = datetime.fromisoformat(iso)
+            if na.tzinfo is None:
+                na = na.replace(tzinfo=timezone.utc)
+            return max(0, int((na - datetime.now(timezone.utc)).total_seconds()))
+        except ValueError:
+            return 0
+
+    def _seconds_until_quiet_ends(self) -> int:
+        now = self._local_now()
+        end = now.replace(hour=QUIET_HOUR_END, minute=0, second=0, microsecond=0)
+        if now >= end:
+            end += timedelta(days=1)
+        return max(0, int((end - now).total_seconds()))
+
+    def _seconds_until_next_day(self) -> int:
+        now = self._local_now()
+        next_day = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return max(0, int((next_day - now).total_seconds()))
+
+    def check_accept(self) -> Tuple[bool, Optional[str], Optional[int]]:
+        """是否可接受新任务。返回 (ok, decline_reason, recover_in_sec)。"""
         if self._busy:
-            return False, "busy"
+            return False, "busy", None
         if self.in_quiet_hours():
-            return False, "quiet_hours"
+            return False, "quiet_hours", self._seconds_until_quiet_ends()
         st = self._load()
         self._reset_daily_if_needed(st)
         if st.get("daily_tweet_count", 0) >= DAILY_TWEET_LIMIT:
-            return False, "daily_quota"
+            return False, "daily_quota", self._seconds_until_next_day()
         next_after = st.get("next_accept_after")
         if next_after:
-            try:
-                na = datetime.fromisoformat(next_after)
-                if na.tzinfo is None:
-                    na = na.replace(tzinfo=timezone.utc)
-                if datetime.now(timezone.utc) < na:
-                    return False, "min_interval"
-            except ValueError:
-                pass
-        return True, None
+            recover = self._seconds_until_iso(next_after)
+            if recover > 0:
+                return False, "min_interval", recover
+        return True, None, None
 
     def on_task_completed(self, tweets_fetched: int) -> None:
         """任务完成后：累计日配额 + 随机冷却。"""
