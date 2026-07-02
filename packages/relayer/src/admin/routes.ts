@@ -109,7 +109,7 @@ adminRoutes.patch('/subtasks/:id', asyncHandler(async (req, res) => {
 // ---- node ----
 adminRoutes.get('/nodes', asyncHandler(async (_req, res) => {
   const [rows] = await pool.execute(
-    'SELECT node_id, label, status, timezone, cookie_health, weight, last_heartbeat, created_at FROM `bsc_tds_node` ORDER BY created_at DESC',
+    'SELECT node_id, label, status, timezone, cookie_health, weight, tagai_account, tagai_username, last_heartbeat, created_at FROM `bsc_tds_node` ORDER BY created_at DESC',
   );
   res.json({ c: 0, d: rows });
 }));

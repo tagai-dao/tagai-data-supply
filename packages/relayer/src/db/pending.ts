@@ -248,9 +248,13 @@ export async function backupToAllTweets(tweet_id: string, content: string): Prom
 }
 
 export async function listPending(status: number | null, limit = 100, offset = 0): Promise<any[]> {
+  const base = `
+    SELECT p.*, n.label AS node_label, n.tagai_username AS tagai_username
+    FROM \`bsc_tds_pending_tweet\` p
+    LEFT JOIN \`bsc_tds_node\` n ON p.node_id = n.node_id`;
   const sql = status !== null
-    ? 'SELECT * FROM `bsc_tds_pending_tweet` WHERE status = ? ORDER BY id DESC LIMIT ? OFFSET ?'
-    : 'SELECT * FROM `bsc_tds_pending_tweet` ORDER BY id DESC LIMIT ? OFFSET ?';
+    ? `${base} WHERE p.status = ? ORDER BY p.id DESC LIMIT ? OFFSET ?`
+    : `${base} ORDER BY p.id DESC LIMIT ? OFFSET ?`;
   const params = status !== null ? [status, limit, offset] : [limit, offset];
   const [rows] = await pool.query(sql, params);
   return rows as any[];

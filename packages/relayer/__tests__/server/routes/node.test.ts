@@ -133,7 +133,7 @@ describe('POST /node/register (spec §10.1)', () => {
     expect(consumeInvite).toHaveBeenCalledWith('good');
     expect(createNode).toHaveBeenCalledWith(expect.objectContaining({
       node_id: 'node_test1', timezone: 'Asia/Shanghai', label: 'n1', invite_id: 'inv_1',
-      tagai_account: '111', tagai_account_type: 0,
+      tagai_account: '111', tagai_account_type: 0, tagai_username: 'alice',
     }));
   });
 });

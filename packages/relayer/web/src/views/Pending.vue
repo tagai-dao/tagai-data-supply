@@ -10,6 +10,25 @@ const statusFilter = ref(3);
 const statusType = (s: number) => ({ 0: 'info', 1: 'warning', 2: 'success', 3: 'danger', 5: '' } as any)[s] || 'info';
 const statusLabel = (s: number) => ({ 0: '待处理', 1: '已发帖', 2: '完成', 3: '失败', 5: '处理中' } as any)[s] || s;
 
+const tweetTypeLabel = (row: { tweet_type?: string; kind?: string }) => {
+  const t = row.tweet_type || (row.kind === 'reply' ? 'reply' : 'original');
+  if (t === 'quote') return '引用';
+  if (t === 'reply') return '回复';
+  return '推文';
+};
+
+const tweetTypeTag = (row: { tweet_type?: string; kind?: string }) => {
+  const t = row.tweet_type || (row.kind === 'reply' ? 'reply' : 'original');
+  if (t === 'quote') return 'warning';
+  if (t === 'reply') return 'info';
+  return 'success';
+};
+
+function withLabel(id: string | null | undefined, label: string | null | undefined) {
+  if (!id) return '-';
+  return label ? `${id} (${label})` : id;
+}
+
 async function load() {
   loading.value = true;
   try { list.value = (await api.listPending(statusFilter.value)) as any[]; }
@@ -38,17 +57,26 @@ onMounted(load);
     </div>
     <el-table :data="list" v-loading="loading" border>
       <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="tweet_id" label="Tweet ID" width="200" />
-      <el-table-column prop="tick" label="tick" width="120" />
-      <el-table-column prop="node_id" label="抓取节点" width="180" />
-      <el-table-column prop="tagai_account" label="策展账号" width="140" />
+      <el-table-column prop="tweet_id" label="Tweet ID" width="180" show-overflow-tooltip />
+      <el-table-column label="类型" width="80">
+        <template #default="{ row }">
+          <el-tag :type="tweetTypeTag(row)" size="small">{{ tweetTypeLabel(row) }}</el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="tick" label="tick" width="110" />
+      <el-table-column label="抓取节点" min-width="200" show-overflow-tooltip>
+        <template #default="{ row }">{{ withLabel(row.node_id, row.node_label) }}</template>
+      </el-table-column>
+      <el-table-column label="策展账号" min-width="180" show-overflow-tooltip>
+        <template #default="{ row }">{{ withLabel(row.tagai_account, row.tagai_username) }}</template>
+      </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }"><el-tag :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag></template>
       </el-table-column>
       <el-table-column prop="retry_count" label="重试" width="60" />
-      <el-table-column prop="last_error" label="错误" min-width="180" show-overflow-tooltip />
-      <el-table-column prop="update_at" label="更新时间" width="180" />
-      <el-table-column label="操作" width="100">
+      <el-table-column prop="last_error" label="错误" min-width="160" show-overflow-tooltip />
+      <el-table-column prop="update_at" label="更新时间" width="170" />
+      <el-table-column label="操作" width="90" fixed="right">
         <template #default="{ row }">
           <el-button size="small" type="primary" @click="retry(row.id)" :disabled="row.status !== 3">重试</el-button>
         </template>

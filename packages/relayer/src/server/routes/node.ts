@@ -122,6 +122,7 @@ nodeRoutes.post('/register', asyncHandler(async (req: Request, res: Response) =>
     label: label ?? consumed.label ?? null,
     tagai_account: verified.twitter_id,
     tagai_account_type: accountType,
+    tagai_username: verified.twitter_username,
   });
   // 回填 invite.node_id，建立 invite↔node 双向关联
   await linkInviteNode(consumed.invite_id, cred.node_id);

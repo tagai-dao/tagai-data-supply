@@ -19,7 +19,8 @@ it('GET /admin/pending 默认查 status=3', async () => {
   expect(r.status).toBe(200);
   expect(r.body.d).toHaveLength(1);
   const sql = (pool.query as jest.Mock).mock.calls[0][0];
-  expect(sql).toContain('status = ?');
+  expect(sql).toContain('p.status = ?');
+  expect(sql).toContain('bsc_tds_node');
 });
 
 it('POST /admin/pending/:id/retry → status 回 0', async () => {
