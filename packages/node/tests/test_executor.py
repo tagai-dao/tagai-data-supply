@@ -134,7 +134,10 @@ async def test_executor_scraper_error():
 
 
 @pytest.mark.asyncio
-async def test_executor_stops_pagination_when_page_tweets_older_than_24h():
+async def test_executor_stops_pagination_when_page_tweets_older_than_24h(monkeypatch):
+    from tagai_data_supply.runtime import executor as executor_mod
+    monkeypatch.setattr(executor_mod, "MAX_PAGES_PER_TASK", 3)
+
     now = datetime.now(timezone.utc)
     recent = (now - timedelta(hours=1)).isoformat()
     old = (now - timedelta(hours=25)).isoformat()

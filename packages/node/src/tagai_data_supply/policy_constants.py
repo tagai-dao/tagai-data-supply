@@ -11,8 +11,8 @@ MAX_COOLDOWN_MINUTES = 30
 # 每日抓取推文上限（API 返回条数累计）
 DAILY_TWEET_LIMIT = 3000
 
-# 单次 assignment 翻页
-MAX_PAGES_PER_TASK = 3
+# 单次 assignment 翻页（测试阶段暂限 1 页，上线前改回 3）
+MAX_PAGES_PER_TASK = 1
 PAGE_INTERVAL_SEC = 3
 # 本页最远推文早于该小时数则停止翻页
 PAGE_MAX_TWEET_AGE_HOURS = 24
