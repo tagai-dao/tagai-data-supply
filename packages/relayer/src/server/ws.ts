@@ -7,6 +7,7 @@ import {
   findNodeByToken,
   setNodeStatus,
   updateHeartbeat,
+  syncNodeProfile,
   type NodeRow,
 } from '../db/client';
 import { getAssignmentById, setAssignmentStatus } from '../db/tasks';
@@ -25,9 +26,10 @@ export interface WsDeps {
   findNodeByToken: (token: string) => Promise<NodeRow | null>;
   setNodeStatus: (node_id: string, status: NodeRow['status']) => Promise<void>;
   updateHeartbeat: (node_id: string, cookie_status?: string) => Promise<void>;
+  syncNodeProfile: (node_id: string, patch: { tagai_username?: string | null; label?: string | null }) => Promise<void>;
 }
 
-const defaultDeps: WsDeps = { findNodeByToken, setNodeStatus, updateHeartbeat };
+const defaultDeps: WsDeps = { findNodeByToken, setNodeStatus, updateHeartbeat, syncNodeProfile };
 
 export interface WsHandlers {
   onAuthed?: (node_id: string, ws: WebSocket) => void;
@@ -103,6 +105,10 @@ export function handleConnection(ws: WebSocket, ip: string, deps: WsDeps = defau
       registry.register(nodeId, ws);
       await deps.setNodeStatus(nodeId, 'online');
       await deps.updateHeartbeat(nodeId, msg.cookie_status);
+      await deps.syncNodeProfile(nodeId, {
+        tagai_username: msg.tagai_username,
+        label: msg.label,
+      }).catch(() => {});
       clearTimeout(helloTimer);
       ws.send(JSON.stringify({
         type: 'auth_ack',

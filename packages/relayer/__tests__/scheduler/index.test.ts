@@ -1,4 +1,5 @@
 import { Scheduler, SchedulerDeps } from '../../src/scheduler/index';
+import { buildTaskAssignMsg } from '../../src/scheduler/redispatch';
 
 function mkSubtask(id: string, mode: 'continuous' | 'round' = 'continuous', cursor: string | null = null) {
   return {
@@ -17,12 +18,18 @@ function mkNode(id: string, health = 100) {
 }
 
 function mkDeps(over: Partial<SchedulerDeps> = {}): SchedulerDeps {
+  const dispatchTaskAssign = jest.fn(async (subtask, node_id, send) => {
+    const assignmentId = 'asg_test';
+    const sent = send(node_id, buildTaskAssignMsg(subtask, assignmentId));
+    return { ok: sent, assignmentId };
+  });
   return {
     listEnabledSubtasks: jest.fn().mockResolvedValue([]),
     getSubtaskLastRunMap: jest.fn().mockResolvedValue(new Map()),
     listOnlineNodes: jest.fn().mockResolvedValue([]),
     getNodeActiveAssignment: jest.fn().mockResolvedValue(null),
-    createAssignment: jest.fn().mockResolvedValue(undefined),
+    dispatchTaskAssign,
+    reclaimStaleAssignments: jest.fn().mockResolvedValue(0),
     send: jest.fn().mockReturnValue(true),
     sleep: jest.fn().mockResolvedValue(undefined),
     now: jest.fn().mockReturnValue(Date.now()),
@@ -49,24 +56,26 @@ describe('Scheduler (spec §8)', () => {
 
   it('serial mode (1 node): assigns one subtask, sends task_assign, sleeps after', async () => {
     const send = jest.fn().mockReturnValue(true);
-    const createAssignment = jest.fn().mockResolvedValue(undefined);
+    const dispatchTaskAssign = jest.fn(async (subtask, node_id, sendFn) => {
+      sendFn(node_id, buildTaskAssignMsg(subtask, 'asg_test'));
+      return { ok: true, assignmentId: 'asg_test' };
+    });
     const sleep = jest.fn().mockResolvedValue(undefined);
     const deps = mkDeps({
       listEnabledSubtasks: jest.fn().mockResolvedValue([mkSubtask('s1'), mkSubtask('s2')]),
       listOnlineNodes: jest.fn().mockResolvedValue([mkNode('n1')]), // 1 节点 → serial
-      send, createAssignment, sleep,
+      send, dispatchTaskAssign, sleep,
     });
     const s = new Scheduler(deps);
     const r = await s.dispatchOnce();
     // 串行模式：第一任务派发后 sleep；但本节点已 active，第二任务 pickFreeNode 应过滤掉
     expect(r.dispatched).toBe(1);
+    expect(dispatchTaskAssign).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledTimes(1);
     const msg = send.mock.calls[0][1] as any;
     expect(msg.type).toBe('task_assign');
     expect(msg.subtask_id).toBe('s1');
-    expect(msg.assignment_id).toMatch(/^asg_/);
     expect(msg.params).toEqual({ q: '#x' });
-    expect(createAssignment).toHaveBeenCalledTimes(1);
     expect(sleep).toHaveBeenCalled(); // 串行模式施加间隔
   });
 
@@ -119,17 +128,24 @@ describe('Scheduler (spec §8)', () => {
     expect(msg.round_window).toEqual({ minutes: 30 });
   });
 
-  it('send failure → no assignment created', async () => {
-    const send = jest.fn().mockReturnValue(false);
-    const createAssignment = jest.fn();
+  it('send failure → no successful dispatch', async () => {
+    const dispatchTaskAssign = jest.fn().mockResolvedValue({ ok: false, assignmentId: 'asg_x' });
     const deps = mkDeps({
       listEnabledSubtasks: jest.fn().mockResolvedValue([mkSubtask('s1')]),
       listOnlineNodes: jest.fn().mockResolvedValue([mkNode('n1')]),
-      send, createAssignment,
+      dispatchTaskAssign,
     });
     const s = new Scheduler(deps);
     const r = await s.dispatchOnce();
     expect(r.dispatched).toBe(0);
-    expect(createAssignment).not.toHaveBeenCalled();
+    expect(dispatchTaskAssign).toHaveBeenCalledTimes(1);
+  });
+
+  it('runs stale reclaim before dispatch', async () => {
+    const reclaimStaleAssignments = jest.fn().mockResolvedValue(0);
+    const deps = mkDeps({ reclaimStaleAssignments });
+    const s = new Scheduler(deps);
+    await s.dispatchOnce();
+    expect(reclaimStaleAssignments).toHaveBeenCalled();
   });
 });

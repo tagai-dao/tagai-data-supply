@@ -1,13 +1,11 @@
 import { buildTaskAssignMsg, redispatchSubtask } from '../../src/scheduler/redispatch';
-import { getSubtask, createAssignment, getNodeActiveAssignment } from '../../src/db/tasks';
+import { getSubtask, getNodeActiveAssignment } from '../../src/db/tasks';
 import { listOnlineNodes } from '../../src/db/client';
-import { registry } from '../../src/server/connections';
+import { dispatchTaskAssign } from '../../src/scheduler/assign';
 
 jest.mock('../../src/db/tasks');
 jest.mock('../../src/db/client');
-jest.mock('../../src/server/connections', () => ({
-  registry: { send: jest.fn() },
-}));
+jest.mock('../../src/scheduler/assign');
 
 describe('redispatch', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -30,11 +28,14 @@ describe('redispatch', () => {
       { node_id: 'n2', status: 'online', cookie_health: 100, weight: 8 },
     ]);
     (getNodeActiveAssignment as jest.Mock).mockResolvedValue(null);
-    (registry.send as jest.Mock).mockReturnValue(true);
-    (createAssignment as jest.Mock).mockResolvedValue(undefined);
+    (dispatchTaskAssign as jest.Mock).mockResolvedValue({ ok: true, assignmentId: 'asg_new' });
 
     const ok = await redispatchSubtask('st1', ['n1']);
     expect(ok).toBe(true);
-    expect(registry.send).toHaveBeenCalledWith('n2', expect.objectContaining({ type: 'task_assign' }));
+    expect(dispatchTaskAssign).toHaveBeenCalledWith(
+      expect.objectContaining({ subtask_id: 'st1' }),
+      'n2',
+      expect.any(Function),
+    );
   });
 });

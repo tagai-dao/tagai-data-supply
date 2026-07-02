@@ -41,7 +41,7 @@ const INFO_RULES: Array<{ pattern: RegExp; color: ColorName }> = [
   { pattern: /task assigned|ingest|promoted|task_result/i, color: 'green' },
   { pattern: /ws authed|node registered|ws server listening/i, color: 'brightGreen' },
   { pattern: /scheduler dispatched|scheduler started|scheduler tick/i, color: 'blue' },
-  { pattern: /ws closed|assignments reclaimed|redispatch/i, color: 'magenta' },
+  { pattern: /ws closed|assignments reclaimed|redispatch|stale assignment/i, color: 'magenta' },
   { pattern: /task_decline|dispatch send failed|task_result rejected|cookie health alert/i, color: 'yellow' },
   { pattern: /invite created|subtask created/i, color: 'cyan' },
   { pattern: /ws hello timeout|ws offline timeout|ws error|ws unknown/i, color: 'yellow' },

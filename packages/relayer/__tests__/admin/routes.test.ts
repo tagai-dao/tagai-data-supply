@@ -11,6 +11,7 @@ jest.mock('../../src/db/client', () => ({
   listInvites: jest.fn().mockResolvedValue([]),
   listOnlineNodes: jest.fn().mockResolvedValue([]),
   setNodeStatus: jest.fn().mockResolvedValue(undefined),
+  updateNodeWeight: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../../src/db/tasks', () => ({
   createTopic: jest.fn(),
@@ -38,6 +39,7 @@ jest.mock('../../src/scheduler', () => ({
 import { issueInvite } from '../../src/auth/tokens';
 import { createSubtask, validateSubtaskTick } from '../../src/db/tasks';
 import { reclaimNodeAssignments } from '../../src/health/db';
+import { updateNodeWeight } from '../../src/db/client';
 import { pool } from '../../src/db/pool';
 import { clearLogBuffer } from '../../src/utils/logBuffer';
 import { logger } from '../../src/utils/logger';
@@ -94,6 +96,18 @@ describe('admin API (spec §12)', () => {
     const r = await request(app).post('/admin/nodes/n1/reclaim').set('Authorization', ADMIN);
     expect(r.status).toBe(200);
     expect(reclaimNodeAssignments).toHaveBeenCalledWith('n1');
+  });
+
+  it('PATCH /admin/nodes/:id updates weight', async () => {
+    const r = await request(app).patch('/admin/nodes/n1').set('Authorization', ADMIN).send({ weight: 8 });
+    expect(r.status).toBe(200);
+    expect(updateNodeWeight).toHaveBeenCalledWith('n1', 8);
+    expect(r.body.d.weight).toBe(8);
+  });
+
+  it('PATCH /admin/nodes/:id rejects invalid weight', async () => {
+    const r = await request(app).patch('/admin/nodes/n1').set('Authorization', ADMIN).send({});
+    expect(r.status).toBe(400);
   });
 
   it('GET /admin/stats', async () => {

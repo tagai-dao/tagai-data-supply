@@ -1,12 +1,12 @@
 // 节点拒绝任务后立即换节点重派
-import { nanoid } from 'nanoid';
 import { logger } from '../utils/logger';
 import { registry } from '../server/connections';
 import { listOnlineNodes } from '../db/client';
 import {
-  getSubtask, createAssignment, getNodeActiveAssignment, type SubtaskRow,
+  getSubtask, getNodeActiveAssignment, type SubtaskRow,
 } from '../db/tasks';
 import { candidateNodes, selectNode, type DispatchableNode } from './dispatcher';
+import { dispatchTaskAssign } from './assign';
 
 export function buildTaskAssignMsg(subtask: SubtaskRow, assignmentId: string): Record<string, unknown> {
   const msg: Record<string, unknown> = {
@@ -50,12 +50,13 @@ export async function redispatchSubtask(subtask_id: string, excludeNodeIds: stri
     return false;
   }
 
-  const assignmentId = 'asg_' + nanoid(16);
-  const msg = buildTaskAssignMsg(subtask, assignmentId);
-  const sent = sendTaskAssign(node.node_id, msg);
-  if (!sent) return false;
+  const { ok, assignmentId } = await dispatchTaskAssign(
+    subtask,
+    node.node_id,
+    (nodeId, msg) => registry.send(nodeId, msg),
+  );
+  if (!ok) return false;
 
-  await createAssignment(assignmentId, subtask.subtask_id, node.node_id);
   logger.info({
     subtask_id,
     assignment_id: assignmentId,

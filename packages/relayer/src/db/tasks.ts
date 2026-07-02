@@ -199,6 +199,33 @@ export async function getAssignmentBySubtaskAndNode(subtask_id: string, node_id:
 }
 
 // spec §8.1: 公平轮转 — 取各 subtask 最近 last_run_at
+export interface StaleAssignmentRow {
+  assignment_id: string;
+  subtask_id: string;
+  node_id: string;
+}
+
+/** 列出超时未完结的 active assignment */
+export async function listStaleActiveAssignments(timeoutSec: number): Promise<StaleAssignmentRow[]> {
+  const [rows] = await pool.execute<any[]>(
+    `SELECT assignment_id, subtask_id, node_id FROM \`bsc_tds_assignment\`
+     WHERE status IN ('assigned','running')
+       AND assigned_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
+    [timeoutSec],
+  );
+  return rows as StaleAssignmentRow[];
+}
+
+/** 将单条 active assignment 标为 reclaimed（乐观锁：仅 assigned/running） */
+export async function reclaimAssignmentById(assignment_id: string, reason: string): Promise<boolean> {
+  const [res] = await pool.execute<any>(
+    `UPDATE \`bsc_tds_assignment\` SET status = 'reclaimed', result_summary = ?
+     WHERE assignment_id = ? AND status IN ('assigned','running')`,
+    [JSON.stringify({ reason }), assignment_id],
+  );
+  return (res.affectedRows ?? 0) > 0;
+}
+
 export async function getSubtaskLastRunMap(): Promise<Map<string, Date | null>> {
   const [rows] = await pool.execute<any[]>(
     "SELECT subtask_id, MAX(last_run_at) AS last_run FROM `bsc_tds_assignment` GROUP BY subtask_id",

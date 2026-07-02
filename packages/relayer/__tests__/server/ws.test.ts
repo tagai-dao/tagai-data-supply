@@ -45,13 +45,19 @@ function recv(ws: WebSocket, timeoutMs = 1000): Promise<any> {
   });
 }
 
+function makeDeps(overrides: Partial<WsDeps> = {}): WsDeps {
+  return {
+    findNodeByToken: jest.fn(),
+    setNodeStatus: jest.fn(),
+    updateHeartbeat: jest.fn(),
+    syncNodeProfile: jest.fn().mockResolvedValue(undefined),
+    ...overrides,
+  };
+}
+
 describe('WS handshake & heartbeat (spec §6)', () => {
   it('closes if hello not sent within timeout', async () => {
-    const deps: WsDeps = {
-      findNodeByToken: jest.fn(),
-      setNodeStatus: jest.fn(),
-      updateHeartbeat: jest.fn(),
-    };
+    const deps = makeDeps();
     const { port, close } = await startTestServer(deps);
     const ws = await connect(port);
     const code = await new Promise<number>((resolve) => ws.on('close', (c) => resolve(c)));
@@ -65,7 +71,10 @@ describe('WS handshake & heartbeat (spec §6)', () => {
     });
     const setNodeStatus = jest.fn().mockResolvedValue(undefined);
     const updateHeartbeat = jest.fn().mockResolvedValue(undefined);
-    const { port, close } = await startTestServer({ findNodeByToken, setNodeStatus, updateHeartbeat });
+    const syncNodeProfile = jest.fn().mockResolvedValue(undefined);
+    const { port, close } = await startTestServer({
+      findNodeByToken, setNodeStatus, updateHeartbeat, syncNodeProfile,
+    });
 
     const ws = await connect(port);
     ws.send(JSON.stringify({
@@ -84,12 +93,29 @@ describe('WS handshake & heartbeat (spec §6)', () => {
     await close();
   });
 
+  it('syncs node profile from hello', async () => {
+    const findNodeByToken = jest.fn().mockResolvedValue({
+      node_id: 'node_1', token_hash: 'h', status: 'offline', timezone: 'UTC',
+    });
+    const syncNodeProfile = jest.fn().mockResolvedValue(undefined);
+    const { port, close } = await startTestServer(makeDeps({ findNodeByToken, syncNodeProfile }));
+
+    const ws = await connect(port);
+    ws.send(JSON.stringify({
+      type: 'hello', node_token: 'tok_1', protocol_version: '1',
+      timezone: 'UTC', cookie_status: 'ok', tagai_username: 'alice', label: 'lab1',
+    }));
+    await recv(ws);
+    expect(syncNodeProfile).toHaveBeenCalledWith('node_1', {
+      tagai_username: 'alice',
+      label: 'lab1',
+    });
+    ws.close();
+    await close();
+  });
+
   it('closes on invalid node_token', async () => {
-    const deps: WsDeps = {
-      findNodeByToken: jest.fn().mockResolvedValue(null),
-      setNodeStatus: jest.fn(),
-      updateHeartbeat: jest.fn(),
-    };
+    const deps = makeDeps({ findNodeByToken: jest.fn().mockResolvedValue(null) });
     const { port, close } = await startTestServer(deps);
     const ws = await connect(port);
     ws.send(JSON.stringify({
@@ -102,11 +128,9 @@ describe('WS handshake & heartbeat (spec §6)', () => {
   });
 
   it('closes on protocol version mismatch', async () => {
-    const deps: WsDeps = {
+    const deps = makeDeps({
       findNodeByToken: jest.fn().mockResolvedValue({ node_id: 'n', status: 'offline' }),
-      setNodeStatus: jest.fn(),
-      updateHeartbeat: jest.fn(),
-    };
+    });
     const { port, close } = await startTestServer(deps);
     const ws = await connect(port);
     ws.send(JSON.stringify({
@@ -122,11 +146,10 @@ describe('WS handshake & heartbeat (spec §6)', () => {
 
   it('marks node offline on disconnect', async () => {
     const setNodeStatus = jest.fn().mockResolvedValue(undefined);
-    const deps: WsDeps = {
+    const deps = makeDeps({
       findNodeByToken: jest.fn().mockResolvedValue({ node_id: 'node_x', status: 'offline' }),
       setNodeStatus,
-      updateHeartbeat: jest.fn().mockResolvedValue(undefined),
-    };
+    });
     const { port, close } = await startTestServer(deps);
     const ws = await connect(port);
     ws.send(JSON.stringify({

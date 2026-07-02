@@ -47,13 +47,14 @@ async def test_handshake_sends_hello(monkeypatch):
     client = NodeClient(
         relayer_url="ws://x", node_token="tok",
         timezone="UTC", cookie_status=CookieStatus.OK,
+        tagai_username="alice",
         ws_factory=lambda url: asyncio.sleep(0, result=fake),
     )
-    # 仅跑握手
     await client._handshake(fake)
     sent = json.loads(fake.sent[0])
     assert sent["type"] == "hello"
     assert sent["node_token"] == "tok"
+    assert sent["tagai_username"] == "alice"
     assert sent["protocol_version"] == "1"
     assert client.authed is True
 

@@ -37,6 +37,7 @@ class Hello(BaseModel):
     timezone: str
     cookie_status: CookieStatus = CookieStatus.UNKNOWN
     label: Optional[str] = None
+    tagai_username: Optional[str] = None
 
 
 class AuthAck(BaseModel):

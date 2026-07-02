@@ -10,7 +10,8 @@
     "protocol_version": { "type": "string" },
     "timezone": { "type": "string" },
     "cookie_status": { "type": "string", "enum": ["ok", "rate_limited", "auth_failed", "error", "unknown"] },
-    "label": { "type": "string" }
+    "label": { "type": "string" },
+    "tagai_username": { "type": "string" }
   },
   "additionalProperties": false
 }

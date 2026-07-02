@@ -241,6 +241,28 @@ export async function updateHeartbeat(
   );
 }
 
+/** WS hello 时同步节点展示信息（label / tagai_username） */
+export async function syncNodeProfile(
+  node_id: string,
+  patch: { tagai_username?: string | null; label?: string | null },
+): Promise<void> {
+  const sets: string[] = [];
+  const vals: any[] = [];
+  const username = patch.tagai_username?.trim().replace(/^@/, '');
+  if (username) {
+    sets.push('tagai_username = ?');
+    vals.push(username);
+  }
+  const label = patch.label?.trim();
+  if (label) {
+    sets.push('label = ?');
+    vals.push(label);
+  }
+  if (sets.length === 0) return;
+  vals.push(node_id);
+  await pool.execute(`UPDATE \`bsc_tds_node\` SET ${sets.join(', ')} WHERE node_id = ?`, vals);
+}
+
 export async function updateNodeWeight(node_id: string, weight: number): Promise<void> {
   const w = Math.max(1, Math.min(10, Math.round(weight)));
   await pool.execute('UPDATE `bsc_tds_node` SET weight = ? WHERE node_id = ?', [w, node_id]);

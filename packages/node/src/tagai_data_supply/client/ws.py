@@ -40,6 +40,8 @@ class NodeClient:
         ws_factory: Optional[Callable[[str], Awaitable[Any]]] = None,
         on_auth_change: Optional[Callable[[bool], None]] = None,
         task_gate: Optional[Any] = None,
+        tagai_username: Optional[str] = None,
+        label: Optional[str] = None,
     ):
         self.relayer_url = relayer_url
         self.node_token = node_token
@@ -50,6 +52,8 @@ class NodeClient:
         self._ws_factory = ws_factory
         self._on_auth_change = on_auth_change
         self._task_gate = task_gate
+        self._tagai_username = tagai_username
+        self._label = label
         self._stop = asyncio.Event()
         self.authed = False
 
@@ -106,6 +110,8 @@ class NodeClient:
             protocol_version=PROTOCOL_VERSION,
             timezone=self.timezone,
             cookie_status=self.cookie_status,
+            label=self._label,
+            tagai_username=self._tagai_username,
         )
         await ws.send(hello.model_dump_json())
         raw = await ws.recv()
@@ -184,6 +190,8 @@ class NodeClient:
                     self._task_gate.set_busy(False)
         elif t == MessageType.TASK_CANCEL.value:
             logger.info("task cancelled: %s", msg.get("subtask_id"))
+            if self._task_gate is not None:
+                self._task_gate.set_busy(False)
         else:
             logger.debug("unhandled message: %s", t)
 

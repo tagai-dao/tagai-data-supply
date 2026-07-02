@@ -4,17 +4,17 @@
 // - 单节点串行：节点有 active assignment 不再派
 // - 派发 task_assign，建 assignment
 
-import { nanoid } from 'nanoid';
 import { logger } from '../utils/logger';
 import {
-  listEnabledSubtasks, getSubtaskLastRunMap, createAssignment, getNodeActiveAssignment,
+  listEnabledSubtasks, getSubtaskLastRunMap, getNodeActiveAssignment,
   type SubtaskRow,
 } from '../db/tasks';
 import { listOnlineNodes } from '../db/client';
 import { registry } from '../server/connections';
 import { rankSubtasks, type SelectableSubtask } from './selector';
 import { candidateNodes, selectNode, dispatchDelaySec, type DispatchableNode } from './dispatcher';
-import { buildTaskAssignMsg } from './redispatch';
+import { dispatchTaskAssign } from './assign';
+import { reclaimStaleAssignments } from './stale';
 import {
   SERIAL_NODE_THRESHOLD,
   DISPATCH_MIN_INTERVAL_SEC,
@@ -28,7 +28,8 @@ export interface SchedulerDeps {
   getSubtaskLastRunMap: typeof getSubtaskLastRunMap;
   listOnlineNodes: typeof listOnlineNodes;
   getNodeActiveAssignment: typeof getNodeActiveAssignment;
-  createAssignment: typeof createAssignment;
+  dispatchTaskAssign: typeof dispatchTaskAssign;
+  reclaimStaleAssignments: typeof reclaimStaleAssignments;
   send: (nodeId: string, msg: object) => boolean;
   sleep: (ms: number) => Promise<void>;
   now: () => number;
@@ -39,7 +40,8 @@ const defaultDeps: SchedulerDeps = {
   getSubtaskLastRunMap,
   listOnlineNodes,
   getNodeActiveAssignment,
-  createAssignment,
+  dispatchTaskAssign,
+  reclaimStaleAssignments,
   send: (nodeId, msg) => registry.send(nodeId, msg),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   now: () => Date.now(),
@@ -80,6 +82,10 @@ export class Scheduler {
 
   // 单次调度：尝试为空闲节点派发任务
   async dispatchOnce(): Promise<{ dispatched: number }> {
+    await this.deps.reclaimStaleAssignments().catch((e) => {
+      logger.warn(e, 'reclaim stale assignments failed');
+    });
+
     const subtasks = await this.deps.listEnabledSubtasks();
     if (subtasks.length === 0) return { dispatched: 0 };
 
@@ -135,15 +141,15 @@ export class Scheduler {
   }
 
   private async assignAndDispatch(subtask: SubtaskRow, node: DispatchableNode): Promise<boolean> {
-    const assignmentId = 'asg_' + nanoid(16);
-    const msg = buildTaskAssignMsg(subtask, assignmentId);
-
-    const sent = this.deps.send(node.node_id, msg);
-    if (!sent) {
+    const { ok, assignmentId } = await this.deps.dispatchTaskAssign(
+      subtask,
+      node.node_id,
+      (nodeId, msg) => this.deps.send(nodeId, msg),
+    );
+    if (!ok) {
       logger.warn({ node_id: node.node_id, subtask_id: subtask.subtask_id }, 'dispatch send failed (node not connected)');
       return false;
     }
-    await this.deps.createAssignment(assignmentId, subtask.subtask_id, node.node_id);
     logger.info({ node_id: node.node_id, subtask_id: subtask.subtask_id, assignment_id: assignmentId }, 'task assigned');
     return true;
   }

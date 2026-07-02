@@ -52,6 +52,8 @@ export const api = {
   disableNode: (id: string) => http.post(`/admin/nodes/${id}/disable`).then(unwrap),
   reenableNode: (id: string) => http.post(`/admin/nodes/${id}/reenable`).then(unwrap),
   reclaimNode: (id: string) => http.post(`/admin/nodes/${id}/reclaim`).then(unwrap),
+  updateNodeWeight: (id: string, weight: number) =>
+    http.patch(`/admin/nodes/${id}`, { weight }).then(unwrap) as Promise<{ node_id: string; weight: number }>,
 
   // invites
   createInvite: (label?: string) =>

@@ -5,12 +5,14 @@ import { api } from '../api';
 
 const list = ref<any[]>([]);
 const loading = ref(false);
+const savingWeight = ref<string | null>(null);
 let timer: any;
 
 async function load(silent = false) {
   if (!silent) loading.value = true;
   try {
-    list.value = (await api.listNodes()) as any[];
+    const rows = (await api.listNodes()) as any[];
+    list.value = rows.map((n) => ({ ...n, weight: n.weight ?? 5 }));
   } finally {
     if (!silent) loading.value = false;
   }
@@ -36,6 +38,21 @@ async function reclaim(id: string) {
   ElMessage.success('已回收任务');
   load();
 }
+
+async function onWeightChange(row: any, value: number | undefined) {
+  if (value == null || value < 1 || value > 10) return;
+  savingWeight.value = row.node_id;
+  try {
+    const d = await api.updateNodeWeight(row.node_id, value);
+    row.weight = d.weight;
+    ElMessage.success(`权重已更新为 ${d.weight}`);
+  } catch (e: any) {
+    ElMessage.error(e?.message || '权重更新失败');
+    load(true);
+  } finally {
+    savingWeight.value = null;
+  }
+}
 </script>
 
 <template>
@@ -56,6 +73,26 @@ async function reclaim(id: string) {
       <el-table-column label="cookie 健康" width="110">
         <template #default="{ row }">
           <el-progress :percentage="row.cookie_health" :stroke-width="8" :status="row.cookie_health < 30 ? 'exception' : row.cookie_health >= 70 ? 'success' : ''" />
+        </template>
+      </el-table-column>
+      <el-table-column label="调度权重" width="140">
+        <template #header>
+          <span>调度权重</span>
+          <el-tooltip content="1–10，越高越容易被派单（结合 cookie 健康等综合计算）" placement="top">
+            <span style="margin-left: 4px; color: #909399; cursor: help">?</span>
+          </el-tooltip>
+        </template>
+        <template #default="{ row }">
+          <el-input-number
+            v-model="row.weight"
+            :min="1"
+            :max="10"
+            :step="1"
+            size="small"
+            controls-position="right"
+            :disabled="savingWeight === row.node_id"
+            @change="(v: number | undefined) => onWeightChange(row, v)"
+          />
         </template>
       </el-table-column>
       <el-table-column prop="last_heartbeat" label="最近心跳" width="180" />

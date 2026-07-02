@@ -306,6 +306,7 @@ def _run_foreground(*, log_path, status_interval: int, console: bool) -> None:
         on_task=on_task,
         on_auth_change=_on_auth,
         task_gate=gate,
+        tagai_username=manifest.tagai_username if manifest else None,
     )
 
     async def _run_with_status():
