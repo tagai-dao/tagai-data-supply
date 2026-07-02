@@ -26,8 +26,11 @@ src/tagai_data_supply/runtime/dedup.py
 src/tagai_data_supply/runtime/executor.py
 src/tagai_data_supply/runtime/tweet_time.py
 src/tagai_data_supply/scraper/__init__.py
+src/tagai_data_supply/scraper/parent_resolver.py
+src/tagai_data_supply/scraper/tweet_classifier.py
 src/tagai_data_supply/scraper/twikit_compat.py
 src/tagai_data_supply/scraper/twikit_scraper.py
+src/tagai_data_supply/scraper/twitter_api_payload.py
 src/tagai_data_supply_node.egg-info/PKG-INFO
 src/tagai_data_supply_node.egg-info/SOURCES.txt
 src/tagai_data_supply_node.egg-info/dependency_links.txt
@@ -47,7 +50,9 @@ tests/test_runtime_store.py
 tests/test_scraper_probe.py
 tests/test_social_sim.py
 tests/test_task_gate.py
+tests/test_tweet_classifier.py
 tests/test_tweet_time.py
 tests/test_twikit_compat.py
 tests/test_twikit_pack.py
+tests/test_twitter_api_payload.py
 tests/test_ws_client.py
