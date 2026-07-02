@@ -49,3 +49,5 @@ def test_pack_includes_author_on_tweet():
     assert tw["twitter_id"] == "123"
     assert tw["twitter_username"] == "bob_x"
     assert tw["twitter_name"] == "Bob"
+    assert "raw_payload" in tw
+    assert tw["raw_payload"]["data"]["text"] == "hello"

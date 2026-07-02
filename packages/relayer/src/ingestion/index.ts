@@ -7,7 +7,7 @@ import {
   getSubtask, setAssignmentStatus, addAssignmentAcceptedCount,
   updateSubtaskWatermark,
 } from '../db/tasks';
-import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets } from '../db/pending';
+import { tweetExistsInBscTweet, insertPendingTweet, backupToAllTweets, buildAllTweetsContent } from '../db/pending';
 import { NO_TICK_SENTINEL, ASSIGNMENT_MAX_TWEETS } from '../config/constants';
 import { logger } from '../utils/logger';
 
@@ -134,7 +134,7 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
       });
       if (inserted) {
         promoted++;
-        await backupToAllTweets(tw.tweet_id, String(tw.content ?? ''));
+        await backupToAllTweets(tw.tweet_id, buildAllTweetsContent(tw));
       } else {
         deduped++;  // pending UNIQUE 兜底
       }

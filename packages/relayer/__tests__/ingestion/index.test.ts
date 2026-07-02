@@ -36,6 +36,7 @@ jest.mock('../../src/db/pending', () => ({
   tweetExistsInBscTweet: jest.fn(),
   insertPendingTweet: jest.fn(),
   backupToAllTweets: jest.fn(),
+  buildAllTweetsContent: jest.requireActual('../../src/db/pending').buildAllTweetsContent,
 }));
 
 import { ingestTaskResult } from '../../src/ingestion';
@@ -98,8 +99,14 @@ describe('ingestTaskResult (spec §4.2)', () => {
       tweet_id: '1800000000000000002', tagai_account: '111', tagai_account_type: 0, tick: 'SPACEX',
       twitter_username: 'alice', twitter_name: 'Alice', profile: 'https://x.com/a.jpg',
       followers: 100, followings: 50, tweet_count: 200, like_count: 300, listed_count: 4, verified: true,
+      content: 'hi',
     }));
-    expect(backupToAllTweets).toHaveBeenCalled();
+    expect(backupToAllTweets).toHaveBeenCalledWith(
+      '1800000000000000002',
+      expect.stringContaining('"data"'),
+    );
+    const backupJson = JSON.parse((backupToAllTweets as jest.Mock).mock.calls[0][1]);
+    expect(backupJson.data.text).toBe('hi');
   });
 
   it('node 无绑定账号 → 推文不写 pending（跳过）', async () => {

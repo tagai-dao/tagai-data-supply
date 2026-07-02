@@ -10,6 +10,8 @@ import asyncio
 import logging
 from typing import Any, Optional
 
+from .twitter_api_payload import pack_twitter_api_payload
+
 logger = logging.getLogger(__name__)
 
 
@@ -215,7 +217,9 @@ class TwikitScraper:
             tweets.append({
                 "tweet_id": getattr(t, "id", None),
                 "twitter_id": getattr(user, "id", None),
+                # pending / bsc_tweet 用纯文本；all_tweets 用 raw_payload（Twitter API v2 形态）
                 "content": getattr(t, "text", "") or getattr(t, "full_text", ""),
+                "raw_payload": pack_twitter_api_payload(t, user),
                 "tweet_time": getattr(t, "created_at", None),
                 "tags": None,
                 "video_link": None,

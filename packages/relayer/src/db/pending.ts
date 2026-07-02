@@ -48,6 +48,68 @@ export async function insertPendingTweet(p: PendingTweet): Promise<boolean> {
 }
 
 // 写 all_tweets 原始备份（spec §4.2，不去重，沿用 tiptag 行为）
+// content 存 Twitter API v2 JSON 字符串（data + includes），与 twitter.ts storeTweetToDb 一致
+export function buildAllTweetsContent(tw: {
+  tweet_id: string;
+  twitter_id?: string | null;
+  content?: string | null;
+  tweet_time?: string | number | Date | null;
+  raw_payload?: unknown;
+  twitter_username?: string | null;
+  twitter_name?: string | null;
+  profile?: string | null;
+  followers?: number | null;
+  followings?: number | null;
+  tweet_count?: number | null;
+  like_count?: number | null;
+  listed_count?: number | null;
+  verified?: boolean | number | null;
+}): string {
+  if (tw.raw_payload != null) {
+    if (typeof tw.raw_payload === 'string') return tw.raw_payload;
+    return JSON.stringify(tw.raw_payload);
+  }
+  // 旧 Node 无 raw_payload 时的兜底：构造最小 v2 结构
+  const createdAt = tw.tweet_time instanceof Date
+    ? tw.tweet_time.toISOString()
+    : tw.tweet_time != null
+      ? String(tw.tweet_time)
+      : new Date().toISOString();
+  const authorId = String(tw.twitter_id ?? '');
+  return JSON.stringify({
+    data: {
+      id: tw.tweet_id,
+      text: String(tw.content ?? ''),
+      author_id: authorId,
+      conversation_id: tw.tweet_id,
+      created_at: createdAt,
+      edit_history_tweet_ids: [tw.tweet_id],
+      entities: {},
+      geo: {},
+      article: {},
+      attachments: {},
+    },
+    includes: {
+      users: authorId ? [{
+        id: authorId,
+        name: tw.twitter_name ?? tw.twitter_username ?? authorId,
+        username: tw.twitter_username ?? authorId,
+        profile_image_url: tw.profile ?? '',
+        public_metrics: {
+          followers_count: tw.followers ?? 0,
+          following_count: tw.followings ?? 0,
+          tweet_count: tw.tweet_count ?? 0,
+          listed_count: tw.listed_count ?? 0,
+          like_count: tw.like_count ?? 0,
+          media_count: 0,
+        },
+        verified: Boolean(tw.verified),
+      }] : [],
+      tweets: [],
+    },
+  });
+}
+
 export async function backupToAllTweets(tweet_id: string, content: string): Promise<void> {
   await pool.execute(
     'INSERT IGNORE INTO `all_tweets` (tweet_id, content) VALUES (?, ?)',
