@@ -28,17 +28,23 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install
+        shell: bash
         run: |
           python -m venv .venv
-          .venv/bin/pip install -U pip
-          .venv/bin/pip install -e ".[dev,scraper]" pyinstaller
-        shell: bash
+          if [ -f .venv/Scripts/python.exe ]; then
+            VPY=.venv/Scripts/python
+          else
+            VPY=.venv/bin/python
+          fi
+          echo "VENV_PYTHON=$VPY" >> "$GITHUB_ENV"
+          "$VPY" -m pip install -U pip
+          "$VPY" -m pip install -e ".[dev,scraper]" pyinstaller
       - name: Test
-        run: .venv/bin/pytest -q
         shell: bash
+        run: ${{ env.VENV_PYTHON }} -m pytest -q
       - name: Build (PyInstaller)
-        run: .venv/bin/pyinstaller tagai-node.spec --noconfirm
         shell: bash
+        run: ${{ env.VENV_PYTHON }} -m PyInstaller tagai-node.spec --noconfirm
       - name: Rename and checksum
         shell: bash
         run: |
