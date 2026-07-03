@@ -57,28 +57,24 @@ pm2 start ecosystem.config.cjs
 
 ### Node（抓取节点，抓取者）
 
-需要 Python ≥ 3.10。
-
-**一条命令安装（推荐）：**
+**一条命令安装并配置（推荐，无需 Python）：**
 
 ```bash
-# 在已克隆仓库内
-bash scripts/install-node.sh
-
-# 或指定远程仓库
-TDS_REPO=https://github.com/tagai-dao/tagai-data-supply.git bash scripts/install-node.sh
+curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/scripts/install-node.sh | bash
 ```
 
-安装后自动进入 `tagai-node setup` 向导（收益账号 @用户名 + 抓取用小号 cookie，分开配置）。
+安装后执行 `source ~/.zshrc`（或新开终端）即可全局使用 `tagai-node`。
 
-**开发者手动安装：**
+已配置用户，一条命令后台运行：
 
 ```bash
-cd packages/node
-python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e ".[scraper]"
-tagai-node setup
+curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/scripts/install-node.sh | bash -s -- run -d
+```
+
+开发者源码安装：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/scripts/install-node.sh | bash -s -- --dev
 ```
 
 ## 使用
@@ -110,11 +106,17 @@ curl -X POST http://<relayer>/admin/subtasks \
 
 ### 3. 在 Node 上注册并运行
 
-抓取者拿到邀请码后，在自己的机器上：
+抓取者拿到邀请码后，在自己的机器上执行一条命令即可：
 
 ```bash
-tagai-node setup       # 交互式：relayer 地址、邀请码、收益 @用户名、抓取 cookie
-tagai-node run         # 常驻运行：连接 Relayer，领任务，抓取，回传
+curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/scripts/install-node.sh | bash
+```
+
+或已安装后：
+
+```bash
+tagai-node setup       # 交互式：邀请码、收益 @用户名、抓取 cookie（Relayer 地址已内置）
+tagai-node run -d      # 后台常驻运行
 tagai-node status      # 查看状态
 tagai-node status --json   # JSON 状态（供 agent 只读）
 ```
@@ -136,7 +138,7 @@ curl http://<relayer>/admin/stats -H "Authorization: Bearer <ADMIN_TOKEN>"
 
 1. 浏览器登录 twitter.com（或 x.com）。
 2. 打开开发者工具 → Application/存储 → Cookies。
-3. 复制 `ct0` 和 `auth_token` 两个值，在 `tagai-node login` 时填入。
+3. 复制 `ct0` 和 `auth_token` 两个值，在 `tagai-node setup` 向导中填入。
 
 cookie 只存在你本机，不会被上传。
 
