@@ -2,20 +2,27 @@
 # PyInstaller spec: 把 tagai-node 打包为单文件可执行（spec §11/P7，全平台）
 # 构建：pyinstaller tagai-node.spec（在各平台分别构建以获得对应平台二进制）
 
+import certifi
+from PyInstaller.utils.hooks import collect_all
+
 block_cipher = None
+
+_certifi_datas, _certifi_binaries, _certifi_hiddenimports = collect_all("certifi")
 
 a = Analysis(
     ['src/tagai_data_supply/__main__.py'],
     pathex=['src'],
-    binaries=[],
-    datas=[],
+    binaries=_certifi_binaries,
+    datas=_certifi_datas,
     hiddenimports=[
+        'certifi',
+        *_certifi_hiddenimports,
         # twikit 为可选依赖；如未安装打包时忽略，运行时按需提示
         'twikit',
     ],
     hookspath=[],
     hooksconfig={},
-    runtime_hooks=[],
+    runtime_hooks=['pyi_rth_certifi.py'],
     excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
