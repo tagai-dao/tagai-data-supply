@@ -1,5 +1,7 @@
 import json
 import stat
+import sys
+
 from tagai_data_supply import cookie, node_state, config
 from tagai_data_supply.config import NodeConfig
 
@@ -9,8 +11,9 @@ def test_save_and_load_cookie(tmp_path, monkeypatch):
     monkeypatch.setattr(cookie, "COOKIE_FILE", p)
     cookie.save_cookie("ct0val", "authval", path=p)
     assert p.exists()
-    mode = stat.S_IMODE(p.stat().st_mode)
-    assert mode == 0o600
+    if sys.platform != "win32":
+        mode = stat.S_IMODE(p.stat().st_mode)
+        assert mode == 0o600
     loaded = cookie.load_cookie(path=p)
     assert loaded == {"ct0": "ct0val", "auth_token": "authval"}
 
