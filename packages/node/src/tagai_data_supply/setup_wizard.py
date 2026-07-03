@@ -5,6 +5,7 @@ import urllib.request
 
 import click
 
+from .http_util import http_headers, no_proxy_opener
 from .registration import register_with_relayer, verify_invite, verify_tagai_account, local_timezone as _local_timezone
 from .config import ensure_config_dir
 from .cookie import save_cookie
@@ -19,8 +20,8 @@ def _normalize_username(raw: str) -> str:
 
 def _ping_relayer(http_base: str) -> bool:
     url = http_base.rstrip("/") + "/health"
-    req = urllib.request.Request(url, method="GET")
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    req = urllib.request.Request(url, method="GET", headers=http_headers())
+    opener = no_proxy_opener()
     try:
         with opener.open(req, timeout=10) as resp:
             return resp.status == 200

@@ -5,6 +5,7 @@ src/tagai_data_supply/__main__.py
 src/tagai_data_supply/cli.py
 src/tagai_data_supply/config.py
 src/tagai_data_supply/cookie.py
+src/tagai_data_supply/http_util.py
 src/tagai_data_supply/interaction_pool.py
 src/tagai_data_supply/log_colors.py
 src/tagai_data_supply/node_logging.py
@@ -45,6 +46,7 @@ tests/test_config.py
 tests/test_cookie_state.py
 tests/test_dedup.py
 tests/test_executor.py
+tests/test_http_util.py
 tests/test_interaction_pool.py
 tests/test_log_colors.py
 tests/test_node_logging.py

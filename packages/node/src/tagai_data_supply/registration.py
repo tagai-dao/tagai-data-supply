@@ -7,6 +7,7 @@ import urllib.request
 import click
 
 from .client.protocol import PROTOCOL_VERSION, RegisterRequest, RegisterResponse
+from .http_util import http_headers, no_proxy_opener
 
 
 def local_timezone() -> str:
@@ -49,8 +50,12 @@ def verify_invite(http_base: str, invite_secret: str) -> dict:
     """setup 预检：校验邀请码有效且未使用，不消费。"""
     url = http_base.rstrip("/") + "/node/verify-invite"
     body = json.dumps({"invite_secret": invite_secret}).encode("utf-8")
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    req = urllib.request.Request(
+        url, data=body,
+        headers=http_headers({"Content-Type": "application/json"}),
+        method="POST",
+    )
+    opener = no_proxy_opener()
     try:
         with opener.open(req, timeout=15) as resp:
             parsed = json.loads(resp.read().decode("utf-8"))
@@ -67,8 +72,12 @@ def verify_tagai_account(http_base: str, tagai_username: str) -> dict:
     """setup 预检：仅需 username，account_type 由服务端从库记录返回。"""
     url = http_base.rstrip("/") + "/node/verify-account"
     body = json.dumps({"tagai_username": tagai_username}).encode("utf-8")
-    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    req = urllib.request.Request(
+        url, data=body,
+        headers=http_headers({"Content-Type": "application/json"}),
+        method="POST",
+    )
+    opener = no_proxy_opener()
     try:
         with opener.open(req, timeout=15) as resp:
             parsed = json.loads(resp.read().decode("utf-8"))
@@ -96,8 +105,12 @@ def register_with_relayer(http_base: str, invite_secret: str, timezone: str,
     ).model_dump(exclude_none=True)
     url = http_base.rstrip("/") + "/node/register"
     data = json.dumps(req_body).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    req = urllib.request.Request(
+        url, data=data,
+        headers=http_headers({"Content-Type": "application/json"}),
+        method="POST",
+    )
+    opener = no_proxy_opener()
     try:
         with opener.open(req, timeout=15) as resp:
             body = json.loads(resp.read().decode("utf-8"))

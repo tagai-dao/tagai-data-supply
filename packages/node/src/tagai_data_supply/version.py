@@ -8,6 +8,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
+from .http_util import http_headers, no_proxy_opener
+
 try:
     from importlib.metadata import PackageNotFoundError, version as pkg_version
 except ImportError:  # pragma: no cover
@@ -64,9 +66,9 @@ def fetch_relayer_version_info(http_base: str, timeout: float = 15.0) -> Optiona
     """GET {http_base}/node/version → 最新版与下载地址。"""
     base = http_base.rstrip("/")
     url = f"{base}/node/version"
-    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    req = urllib.request.Request(url, headers=http_headers({"Accept": "application/json"}))
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with no_proxy_opener().open(req, timeout=timeout) as resp:
             body = json.loads(resp.read().decode("utf-8"))
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
         return None

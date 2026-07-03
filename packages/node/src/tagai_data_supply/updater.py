@@ -12,6 +12,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from .http_util import http_headers, no_proxy_opener
 from .platform_detect import executable_path, is_frozen_binary, platform_asset_key
 from .version import RelayerVersionInfo, get_version, parse_version
 
@@ -21,7 +22,8 @@ class UpdateError(Exception):
 
 
 def _download(url: str, dest: Path) -> None:
-    with urllib.request.urlopen(url, timeout=120) as resp:
+    req = urllib.request.Request(url, headers=http_headers())
+    with no_proxy_opener().open(req, timeout=120) as resp:
         data = resp.read()
     dest.write_bytes(data)
 
@@ -34,7 +36,8 @@ def _verify_sha256(path: Path, expected: str) -> None:
 
 def _read_sha256_sidecar(url: str) -> Optional[str]:
     try:
-        with urllib.request.urlopen(url, timeout=30) as resp:
+        req = urllib.request.Request(url, headers=http_headers())
+        with no_proxy_opener().open(req, timeout=30) as resp:
             line = resp.read().decode("utf-8", errors="replace").strip().split()[0]
             return line if len(line) >= 64 else None
     except OSError:
