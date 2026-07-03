@@ -10,7 +10,7 @@ from pathlib import Path
 
 import click
 
-from .config import NodeConfig, ensure_config_dir
+from .config import NodeConfig, ensure_config_dir, resolve_relayer_http, http_to_ws_url, DEFAULT_RELAYER_HTTP
 from .cookie import save_cookie, load_cookie
 from .node_state import save_state, load_state
 from .client.protocol import CookieStatus
@@ -60,7 +60,7 @@ def cli(ctx, version: bool):
 
 
 @cli.command()
-@click.option("--http-base", default=None, help="Relayer HTTP 地址")
+@click.option("--http-base", default=None, help=f"Relayer HTTP 地址（默认 {DEFAULT_RELAYER_HTTP}）")
 @click.option("--invite-secret", default=None, hide_input=True)
 @click.option("--run/--no-run", "run_after", default=False, help="配置完成后立即运行")
 def setup(http_base: str | None, invite_secret: str | None, run_after: bool):
@@ -151,19 +151,25 @@ def set_timezone(offset: int):
 
 
 @cli.command()
-@click.option("--http-base", prompt="Relayer HTTP 地址", help="relayer http base")
+@click.option(
+    "--http-base",
+    default=DEFAULT_RELAYER_HTTP,
+    show_default=True,
+    help="Relayer HTTP 地址",
+)
 @click.option("--invite-secret", prompt="Invite secret", hide_input=True)
 @click.option("--tagai-username", prompt="收益账号 Twitter 用户名（@ 可省略）")
 @click.option("--label", default=None)
-def configure(http_base: str, invite_secret: str, tagai_username: str, label: str | None):
+def configure(http_base: str | None, invite_secret: str, tagai_username: str, label: str | None):
     """（进阶）非交互注册。推荐使用 `tagai-node setup`。"""
     click.echo("提示：推荐使用 `tagai-node setup`，会引导填写抓取 cookie。")
     ensure_config_dir()
+    http_base = resolve_relayer_http(http_base)
     tz = _local_timezone()
     username = tagai_username.strip().removeprefix("@")
     info = verify_tagai_account(http_base, username)
     cred = register_with_relayer(http_base, invite_secret, tz, label=label, tagai_username=info.get("twitter_username") or username)
-    ws_url = http_base.replace("http://", "ws://").replace("https://", "wss://")
+    ws_url = http_to_ws_url(http_base)
     save_state(NodeConfig(relayer_url=ws_url, node_token=cred["node_token"], timezone=tz))
     click.echo(f"注册成功: node_id={cred['node_id']}。请 `tagai-node login` 后 `run`。")
 

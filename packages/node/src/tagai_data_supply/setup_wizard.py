@@ -7,7 +7,7 @@ import click
 
 from .http_util import http_headers, no_proxy_opener
 from .registration import register_with_relayer, verify_invite, verify_tagai_account, local_timezone as _local_timezone
-from .config import ensure_config_dir
+from .config import ensure_config_dir, resolve_relayer_http, http_to_ws_url
 from .cookie import save_cookie
 from .node_state import save_state, load_state
 from .config import NodeConfig
@@ -51,14 +51,17 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
             pass
         click.echo("请输入 -12 到 14 之间的整数。", err=True)
 
-    # 1. Relayer
-    while True:
-        base = http_base or click.prompt("Relayer HTTP 地址（如 http://host:7701）")
-        base = base.strip().rstrip("/")
-        if _ping_relayer(base):
-            http_base = base
-            break
-        click.echo("无法连接 Relayer，请检查地址与网络。", err=True)
+    # 1. Relayer（默认官方地址，可用 setup --http-base 覆盖）
+    http_base = resolve_relayer_http(http_base)
+    click.echo(f"连接 Relayer: {http_base} ...")
+    if not _ping_relayer(http_base):
+        click.echo(
+            "无法连接 Relayer，请检查网络；本地开发可使用 "
+            "`tagai-node setup --http-base http://127.0.0.1:7701`",
+            err=True,
+        )
+        raise SystemExit(1)
+    click.echo("✓ Relayer 连接正常\n")
 
     # 2. Invite（输入后立即验证，不消费）
     while True:
@@ -124,7 +127,7 @@ def run_setup(*, http_base: str | None = None, invite_secret: str | None = None,
         write_status(build_status_snapshot(phase="setup_failed", extra={"last_error": str(e)}))
         raise SystemExit(1) from e
 
-    ws_url = http_base.replace("http://", "ws://").replace("https://", "wss://")
+    ws_url = http_to_ws_url(http_base)
     save_state(NodeConfig(relayer_url=ws_url, node_token=cred["node_token"], timezone=tz))
     save_cookie(ct0.strip(), auth_token.strip())
     save_manifest(Manifest(

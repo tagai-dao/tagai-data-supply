@@ -7,6 +7,20 @@ CONFIG_DIR = Path(os.environ.get("TDS_NODE_HOME", Path.home() / ".tagai_data_sup
 COOKIE_FILE = CONFIG_DIR / "cookie.json"
 NODE_STATE_FILE = CONFIG_DIR / "node_state.json"
 
+# 官方 Relayer（用户无需手动填写；本地开发可用 CLI --http-base 覆盖）
+DEFAULT_RELAYER_HTTP = "https://tds-relayer.tagai.fun"
+DEFAULT_RELAYER_WS = "wss://tds-relayer.tagai.fun"
+
+
+def resolve_relayer_http(http_base: str | None = None) -> str:
+    """解析 Relayer HTTP 基址，未指定时用官方默认。"""
+    return (http_base or DEFAULT_RELAYER_HTTP).strip().rstrip("/")
+
+
+def http_to_ws_url(http_base: str) -> str:
+    """HTTP(S) 基址转 WebSocket URL。"""
+    return http_base.replace("http://", "ws://").replace("https://", "wss://")
+
 
 @dataclass
 class NodeConfig:
