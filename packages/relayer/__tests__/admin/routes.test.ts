@@ -137,7 +137,11 @@ describe('admin API (spec §12)', () => {
   });
 
   it('GET /admin/global/tds-content-curation-prompt', async () => {
-    (pool.execute as jest.Mock).mockResolvedValueOnce([[{ prompt: 'score tweets by quality' }], []]);
+    // mysql2 CALL：execute 首元素为 [RowDataPacket[], ResultSetHeader]
+    (pool.execute as jest.Mock).mockResolvedValueOnce([
+      [[{ prompt: 'score tweets by quality' }], { fieldCount: 0 }],
+      [],
+    ]);
     const r = await request(app).get('/admin/global/tds-content-curation-prompt').set('Authorization', ADMIN);
     expect(r.status).toBe(200);
     expect(r.body.d.prompt).toBe('score tweets by quality');

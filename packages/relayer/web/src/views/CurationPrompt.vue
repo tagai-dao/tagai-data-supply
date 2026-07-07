@@ -17,6 +17,8 @@ async function load() {
   try {
     const data = await api.getCurationPrompt();
     prompt.value = data.prompt ?? '';
+  } catch (e: any) {
+    ElMessage.error(e.message || '加载失败');
   } finally {
     loading.value = false;
   }
