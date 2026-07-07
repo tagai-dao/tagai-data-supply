@@ -64,6 +64,12 @@ export const api = {
   listPending: (status = 3) => http.get('/admin/pending', { params: { status } }).then(unwrap),
   retryPending: (id: number) => http.post(`/admin/pending/${id}/retry`).then(unwrap),
 
+  // global: TDS 策展 prompt
+  getCurationPrompt: () =>
+    http.get('/admin/global/tds-content-curation-prompt').then(unwrap) as Promise<{ prompt: string }>,
+  updateCurationPrompt: (prompt: string) =>
+    http.put('/admin/global/tds-content-curation-prompt', { prompt }).then(unwrap) as Promise<{ prompt: string }>,
+
   // 运行日志
   listLogs: (params?: { level?: string; q?: string; since_id?: number; limit?: number }) =>
     http.get('/admin/logs', { params }).then(unwrap) as Promise<{ items: LogRecord[]; latestId: number }>,

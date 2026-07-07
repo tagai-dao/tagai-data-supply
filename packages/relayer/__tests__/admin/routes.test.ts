@@ -135,4 +135,35 @@ describe('admin API (spec §12)', () => {
     expect(r.body.d.items.every((i: { level: string }) => i.level === 'debug')).toBe(true);
     expect(r.body.d.items.some((i: { msg: string }) => i.msg === 'task_decline')).toBe(true);
   });
+
+  it('GET /admin/global/tds-content-curation-prompt', async () => {
+    (pool.execute as jest.Mock).mockResolvedValueOnce([[{ prompt: 'score tweets by quality' }], []]);
+    const r = await request(app).get('/admin/global/tds-content-curation-prompt').set('Authorization', ADMIN);
+    expect(r.status).toBe(200);
+    expect(r.body.d.prompt).toBe('score tweets by quality');
+    expect(pool.execute).toHaveBeenCalledWith('CALL tds_get_content_curation_prompt()');
+  });
+
+  it('PUT /admin/global/tds-content-curation-prompt rejects empty', async () => {
+    const r = await request(app)
+      .put('/admin/global/tds-content-curation-prompt')
+      .set('Authorization', ADMIN)
+      .send({ prompt: '   ' });
+    expect(r.status).toBe(400);
+    expect(r.body.m).toMatch(/empty/);
+  });
+
+  it('PUT /admin/global/tds-content-curation-prompt updates', async () => {
+    (pool.execute as jest.Mock).mockResolvedValueOnce([[], []]);
+    const r = await request(app)
+      .put('/admin/global/tds-content-curation-prompt')
+      .set('Authorization', ADMIN)
+      .send({ prompt: 'new prompt' });
+    expect(r.status).toBe(200);
+    expect(r.body.d.prompt).toBe('new prompt');
+    expect(pool.execute).toHaveBeenCalledWith(
+      'CALL tds_set_content_curation_prompt(?)',
+      ['new prompt'],
+    );
+  });
 });

@@ -14,6 +14,7 @@ const menus = [
   { name: 'nodes', label: '节点', icon: 'Connection' },
   { name: 'invites', label: '邀请码', icon: 'Ticket' },
   { name: 'pending', label: '推文处理', icon: 'Document' },
+  { name: 'curation-prompt', label: '策展 Prompt', icon: 'EditPen' },
   { name: 'logs', label: '运行日志', icon: 'Notebook' },
 ];
 

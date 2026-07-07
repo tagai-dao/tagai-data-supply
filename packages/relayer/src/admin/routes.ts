@@ -10,6 +10,7 @@ import {
 } from '../db/tasks';
 import { reclaimNodeAssignments, reEnableNode } from '../health/db';
 import { listPending, retryPending } from '../db/pending';
+import { getTdsContentCurationPrompt, setTdsContentCurationPrompt } from '../db/global';
 import { queryLogs } from '../utils/logBuffer';
 import { logger } from '../utils/logger';
 import { asyncHandler } from '../server/middleware/asyncHandler';
@@ -183,6 +184,28 @@ adminRoutes.get('/pending', asyncHandler(async (req, res) => {
 adminRoutes.post('/pending/:id/retry', asyncHandler(async (req, res) => {
   const ok = await retryPending(Number(req.params.id));
   res.json({ c: 0, d: { id: Number(req.params.id), retried: ok } });
+}));
+
+// ---- global: TDS 发帖策展 prompt ----
+adminRoutes.get('/global/tds-content-curation-prompt', asyncHandler(async (_req, res) => {
+  const prompt = await getTdsContentCurationPrompt();
+  res.json({ c: 0, d: { prompt: prompt ?? '' } });
+}));
+
+adminRoutes.put('/global/tds-content-curation-prompt', asyncHandler(async (req, res) => {
+  const raw = req.body?.prompt;
+  if (typeof raw !== 'string') {
+    res.status(400).json({ c: 1, m: 'prompt (string) required' });
+    return;
+  }
+  const prompt = raw.trim();
+  if (!prompt) {
+    res.status(400).json({ c: 1, m: 'prompt cannot be empty' });
+    return;
+  }
+  await setTdsContentCurationPrompt(prompt);
+  logger.info('tds_content_curation_prompt updated');
+  res.json({ c: 0, d: { prompt } });
 }));
 
 // ---- 运行日志（内存缓冲，含 debug）----

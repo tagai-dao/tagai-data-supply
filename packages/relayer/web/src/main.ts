@@ -12,6 +12,7 @@ import Nodes from './views/Nodes.vue';
 import Invites from './views/Invites.vue';
 import Pending from './views/Pending.vue';
 import Logs from './views/Logs.vue';
+import CurationPrompt from './views/CurationPrompt.vue';
 
 const routes = [
   { path: '/login', name: 'login', component: Login },
@@ -22,6 +23,7 @@ const routes = [
   { path: '/invites', name: 'invites', component: Invites, meta: { title: '邀请码' } },
   { path: '/pending', name: 'pending', component: Pending, meta: { title: '推文处理' } },
   { path: '/logs', name: 'logs', component: Logs, meta: { title: '运行日志' } },
+  { path: '/curation-prompt', name: 'curation-prompt', component: CurationPrompt, meta: { title: '策展 Prompt' } },
 ];
 
 const router = createRouter({
