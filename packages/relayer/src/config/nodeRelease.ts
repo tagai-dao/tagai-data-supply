@@ -1,7 +1,6 @@
 // Node CLI 发布信息（GitHub Release 二进制 + 版本门禁）
 
 export interface NodeReleaseConfig {
-  latestVersion: string;
   minMajor: number;
   githubRepo: string;
   releaseTagPrefix: string;
@@ -9,7 +8,6 @@ export interface NodeReleaseConfig {
 
 export function nodeReleaseConfig(): NodeReleaseConfig {
   return {
-    latestVersion: process.env.TDS_NODE_LATEST_VERSION ?? '0.1.0',
     minMajor: Number(process.env.TDS_NODE_MIN_MAJOR ?? 0),
     githubRepo: process.env.TDS_NODE_GITHUB_REPO ?? '',
     releaseTagPrefix: process.env.TDS_NODE_RELEASE_TAG_PREFIX ?? 'node-v',
@@ -26,10 +24,13 @@ const ASSET_NAMES: Record<string, string> = {
 };
 
 /** 构建 GitHub Release 下载 URL 表 */
-export function buildNodeDownloadMap(cfg: NodeReleaseConfig): Record<string, string> {
+export function buildNodeDownloadMap(
+  cfg: NodeReleaseConfig,
+  latestVersion: string,
+): Record<string, string> {
   const repo = cfg.githubRepo.trim();
   if (!repo) return {};
-  const tag = `${cfg.releaseTagPrefix}${cfg.latestVersion}`;
+  const tag = `${cfg.releaseTagPrefix}${latestVersion}`;
   const base = `https://github.com/${repo}/releases/download/${tag}`;
   const out: Record<string, string> = {};
   for (const [key, name] of Object.entries(ASSET_NAMES)) {

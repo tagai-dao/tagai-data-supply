@@ -7,6 +7,9 @@ jest.mock('../../../src/db/client', () => ({
   createNode: jest.fn(),
   linkInviteNode: jest.fn().mockResolvedValue(undefined),
 }));
+jest.mock('../../../src/config/fetchLatestNodeVersion', () => ({
+  fetchLatestNodeVersion: jest.fn(),
+}));
 jest.mock('../../../src/auth/tokens', () => ({
   issueNodeCredentials: jest.fn(() => ({
     node_id: 'node_test1',
@@ -21,6 +24,7 @@ jest.mock('../../../src/tagai/client', () => ({
 import { checkInvite, consumeInvite, createNode } from '../../../src/db/client';
 import { verifyTagaiAccount } from '../../../src/tagai/client';
 import { registerLimiter } from '../../../src/server/routes/node';
+import { fetchLatestNodeVersion } from '../../../src/config/fetchLatestNodeVersion';
 
 beforeAll(() => {
   Object.assign(process.env, {
@@ -42,7 +46,7 @@ const GOOD_BODY = {
 
 describe('GET /node/version', () => {
   it('returns latest version and download map', async () => {
-    process.env.TDS_NODE_LATEST_VERSION = '1.2.0';
+    (fetchLatestNodeVersion as jest.Mock).mockResolvedValue('1.2.0');
     process.env.TDS_NODE_MIN_MAJOR = '1';
     process.env.TDS_NODE_GITHUB_REPO = 'org/tagai-data-supply';
     const res = await request(app).get('/node/version');
@@ -51,6 +55,13 @@ describe('GET /node/version', () => {
     expect(res.body.d.latest).toBe('1.2.0');
     expect(res.body.d.min_major).toBe(1);
     expect(res.body.d.download.linux_amd64).toContain('node-v1.2.0');
+  });
+
+  it('503 when GitHub version resolution fails', async () => {
+    (fetchLatestNodeVersion as jest.Mock).mockRejectedValue(new Error('GitHub down'));
+    const res = await request(app).get('/node/version');
+    expect(res.status).toBe(503);
+    expect(res.body.c).toBe(1);
   });
 });
 

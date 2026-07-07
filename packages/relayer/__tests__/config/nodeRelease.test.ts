@@ -3,11 +3,10 @@ import { buildNodeDownloadMap, isNodeMajorAllowed, parseNodeMajor } from '../../
 describe('nodeRelease config', () => {
   it('buildNodeDownloadMap from github repo', () => {
     const m = buildNodeDownloadMap({
-      latestVersion: '1.0.0',
       minMajor: 1,
       githubRepo: 'org/repo',
       releaseTagPrefix: 'node-v',
-    });
+    }, '1.0.0');
     expect(m.linux_amd64).toBe(
       'https://github.com/org/repo/releases/download/node-v1.0.0/tagai-node-linux-amd64',
     );
