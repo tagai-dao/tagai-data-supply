@@ -67,6 +67,8 @@ describe('pending DAL', () => {
       tweet_type: 'reply',
       twitter_id: '9',
       content: 'reply text',
+      reply_count: 3,
+      view_count: 500,
       conversation_id: '100',
       parent_tweet_id: '100',
       parent_twitter_id: '8',
@@ -77,6 +79,8 @@ describe('pending DAL', () => {
       topic_id: 't1', subtask_id: 's1', tick: 'SPACEX',
     }, () => new Date('2026-01-01'));
     expect(row.kind).toBe('reply');
+    expect(row.reply_count).toBe(3);
+    expect(row.view_count).toBe(500);
     expect(row.parent_tweet_id).toBe('100');
     expect(row.conversation_id).toBe('100');
   });

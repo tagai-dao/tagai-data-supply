@@ -72,9 +72,9 @@ def resolve_user_display_fields(user: Any) -> dict[str, str]:
     }
 
 
-def _int_metric(user: Any, *names: str) -> int:
+def _int_metric(obj: Any, *names: str) -> int:
     for name in names:
-        val = getattr(user, name, None)
+        val = getattr(obj, name, None)
         if val is None:
             continue
         try:
@@ -82,6 +82,31 @@ def _int_metric(user: Any, *names: str) -> int:
         except (TypeError, ValueError):
             continue
     return 0
+
+
+def _opt_int_metric(obj: Any, *names: str) -> Optional[int]:
+    """解析 twikit 指标；缺失或非法时返回 None（区别于作者的 0 默认）。"""
+    for name in names:
+        val = getattr(obj, name, None)
+        if val is None:
+            continue
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def pack_tweet_public_metrics(tweet: Any) -> dict[str, int]:
+    """推文 public_metrics，对齐 Twitter API v2（浏览量用 impression_count）。"""
+    view = _opt_int_metric(tweet, "view_count")
+    return {
+        "reply_count": _int_metric(tweet, "reply_count"),
+        "like_count": _int_metric(tweet, "favorite_count", "like_count"),
+        "retweet_count": _int_metric(tweet, "retweet_count"),
+        "quote_count": _int_metric(tweet, "quote_count"),
+        "impression_count": view if view is not None else 0,
+    }
 
 
 def pack_twitter_api_user(user: Any) -> dict:
@@ -184,6 +209,7 @@ def pack_twitter_api_payload(tweet: Any, user: Any = None) -> dict:
         "created_at": _iso_time(getattr(tweet, "created_at", None)),
         "edit_history_tweet_ids": [tweet_id] if tweet_id else [],
         "entities": _pack_entities(tweet),
+        "public_metrics": pack_tweet_public_metrics(tweet),
         "geo": {},
         "article": {},
         "attachments": {},

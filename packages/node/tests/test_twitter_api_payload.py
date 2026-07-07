@@ -7,7 +7,6 @@ from tagai_data_supply.scraper.twitter_api_payload import (
     pack_twitter_api_user,
     resolve_user_display_fields,
 )
-from tagai_data_supply.scraper.twikit_scraper import TwikitScraper
 
 
 def test_resolve_user_display_fields_from_core_block():
@@ -93,8 +92,33 @@ def test_pack_twitter_api_payload_reply_shape():
     assert author["username"] == "fenghuangha"
 
 
+def test_pack_twitter_api_payload_includes_tweet_public_metrics():
+    user = SimpleNamespace(id="1", name="A", screen_name="a", profile_image_url="")
+    tweet = SimpleNamespace(
+        id="999",
+        text="metrics tweet",
+        created_at="2026-07-01T00:00:00.000Z",
+        conversation_id="999",
+        user=user,
+        reply_count=12,
+        favorite_count=34,
+        retweet_count=5,
+        quote_count=2,
+        view_count="98765",
+    )
+    payload = pack_twitter_api_payload(tweet, user)
+    metrics = payload["data"]["public_metrics"]
+    assert metrics["reply_count"] == 12
+    assert metrics["like_count"] == 34
+    assert metrics["retweet_count"] == 5
+    assert metrics["quote_count"] == 2
+    assert metrics["impression_count"] == 98765
+
+
 @pytest.mark.asyncio
 async def test_pack_includes_raw_payload_on_tweet():
+    from tagai_data_supply.scraper.twikit_scraper import TwikitScraper
+
     scraper = TwikitScraper(ct0="x", auth_token="y")
     tweet = SimpleNamespace(
         id="999",

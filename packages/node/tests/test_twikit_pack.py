@@ -39,6 +39,8 @@ async def test_pack_includes_author_on_tweet():
         text="hello",
         created_at="2026-07-01T00:00:00+00:00",
         conversation_id="999",
+        reply_count=7,
+        view_count=12345,
         user=SimpleNamespace(
             id="123",
             name="Bob",
@@ -54,4 +56,6 @@ async def test_pack_includes_author_on_tweet():
     assert tw["tweet_type"] == "original"
     assert tw["twitter_username"] == "bob_x"
     assert tw["twitter_id"] == "123"
+    assert tw["reply_count"] == 7
+    assert tw["view_count"] == 12345
     assert tw["raw_payload"]["data"]["text"] == "hello"

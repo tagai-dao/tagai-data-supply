@@ -33,6 +33,10 @@ export interface PendingTweet {
   like_count?: number | null;
   listed_count?: number | null;
   verified?: boolean | number | null;
+  /** 帖子收到的回复数（twikit legacy.reply_count） */
+  reply_count?: number | null;
+  /** 帖子浏览量（twikit views.count） */
+  view_count?: number | null;
   content: string;
   retweet_id?: string | null;
   retweet_info?: string | null;
@@ -78,12 +82,13 @@ export async function insertPendingTweet(p: PendingTweet): Promise<boolean> {
     `INSERT IGNORE INTO \`bsc_tds_pending_tweet\`
      (tweet_id, kind, tweet_type, twitter_id, twitter_username, twitter_name, profile,
       followers, followings, tweet_count, like_count, listed_count, verified,
+      reply_count, view_count,
       content, retweet_id, retweet_info, conversation_id,
       parent_tweet_id, parent_twitter_id, parent_twitter_username, parent_twitter_name, parent_profile,
       parent_followers, parent_followings, parent_tweet_count, parent_like_count, parent_listed_count, parent_verified,
       parent_content, parent_raw_payload, parent_tweet_time,
       tweet_time, node_id, tagai_account, tagai_account_type, topic_id, subtask_id, tick, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     [
       p.tweet_id,
       p.kind ?? 'post',
@@ -98,6 +103,8 @@ export async function insertPendingTweet(p: PendingTweet): Promise<boolean> {
       p.like_count ?? null,
       p.listed_count ?? null,
       toBoolInt(p.verified),
+      p.reply_count ?? null,
+      p.view_count ?? null,
       p.content,
       p.retweet_id ?? null,
       p.retweet_info ?? null,
@@ -150,6 +157,8 @@ export function mapIncomingToPending(
     like_count: tw.like_count != null ? Number(tw.like_count) : null,
     listed_count: tw.listed_count != null ? Number(tw.listed_count) : null,
     verified: tw.verified as boolean | number | null,
+    reply_count: tw.reply_count != null ? Number(tw.reply_count) : null,
+    view_count: tw.view_count != null ? Number(tw.view_count) : null,
     content: String(tw.content ?? ''),
     retweet_id: tw.retweet_id != null ? String(tw.retweet_id) : null,
     retweet_info: tw.retweet_info != null ? String(tw.retweet_info) : null,
@@ -195,6 +204,8 @@ export function buildAllTweetsContent(tw: {
   like_count?: number | null;
   listed_count?: number | null;
   verified?: boolean | number | null;
+  reply_count?: number | null;
+  view_count?: number | null;
 }): string {
   if (tw.raw_payload != null) {
     if (typeof tw.raw_payload === 'string') return tw.raw_payload;
@@ -215,6 +226,13 @@ export function buildAllTweetsContent(tw: {
       created_at: createdAt,
       edit_history_tweet_ids: [tw.tweet_id],
       entities: {},
+      public_metrics: {
+        reply_count: tw.reply_count ?? 0,
+        like_count: 0,
+        retweet_count: 0,
+        quote_count: 0,
+        impression_count: tw.view_count ?? 0,
+      },
       geo: {},
       article: {},
       attachments: {},

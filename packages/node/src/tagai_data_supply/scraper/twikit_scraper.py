@@ -200,6 +200,25 @@ class TwikitScraper:
             "verified": verified,
         }
 
+    def _pack_tweet_metrics(self, tweet) -> dict:
+        """帖子互动指标（twikit Tweet.reply_count / view_count）。"""
+
+        def _opt_int(*names: str):
+            for name in names:
+                val = getattr(tweet, name, None)
+                if val is None:
+                    continue
+                try:
+                    return int(val)
+                except (TypeError, ValueError):
+                    continue
+            return None
+
+        return {
+            "reply_count": _opt_int("reply_count"),
+            "view_count": _opt_int("view_count"),
+        }
+
     async def _pack_single(self, t, parent_resolver: Optional[ParentTweetResolver]) -> Optional[dict]:
         if is_retweet(t):
             return None
@@ -228,6 +247,7 @@ class TwikitScraper:
             "tags": None,
             "video_link": None,
             **author,
+            **self._pack_tweet_metrics(t),
         }
 
         if tweet_type == "reply":
