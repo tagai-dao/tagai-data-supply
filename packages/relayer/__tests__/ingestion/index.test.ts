@@ -33,8 +33,8 @@ jest.mock('../../src/db/tasks', () => ({
   addAssignmentAcceptedCount: jest.fn().mockResolvedValue(1),
 }));
 jest.mock('../../src/db/pending', () => ({
-  tweetExistsInBscTweet: jest.fn(),
-  replyExistsInBscRelationReply: jest.fn(),
+  tweetExistsInAnyChain: jest.fn(),
+  replyExistsInAnyChain: jest.fn(),
   insertPendingTweet: jest.fn(),
   backupToAllTweets: jest.fn(),
   buildAllTweetsContent: jest.requireActual('../../src/db/pending').buildAllTweetsContent,
@@ -44,7 +44,7 @@ jest.mock('../../src/db/pending', () => ({
 import { ingestTaskResult } from '../../src/ingestion';
 import { insertTweet, findNodeById } from '../../src/db/client';
 import { getSubtask, updateSubtaskWatermark } from '../../src/db/tasks';
-import { tweetExistsInBscTweet, replyExistsInBscRelationReply, insertPendingTweet, backupToAllTweets } from '../../src/db/pending';
+import { tweetExistsInAnyChain, replyExistsInAnyChain, insertPendingTweet, backupToAllTweets } from '../../src/db/pending';
 
 beforeAll(() => {
   Object.assign(process.env, {
@@ -55,14 +55,14 @@ beforeAll(() => {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (replyExistsInBscRelationReply as jest.Mock).mockResolvedValue(false);
+  (replyExistsInAnyChain as jest.Mock).mockResolvedValue(false);
 });
 
 describe('ingestTaskResult (spec §4.2)', () => {
   it('推文已在 bsc_tweet → 跳过，deduped++', async () => {
     (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX', topic_id: 't1' });
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
-    (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(true);
+    (tweetExistsInAnyChain as jest.Mock).mockResolvedValue(true);
     const r = await ingestTaskResult({
       subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
       tweets: [{ tweet_id: '1800000000000000001', twitter_id: '9', content: 'hi', tweet_time: null }],
@@ -75,7 +75,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
   it('reply 已在 bsc_relation_reply → 跳过 pending，deduped++', async () => {
     (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX', topic_id: 't1' });
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
-    (replyExistsInBscRelationReply as jest.Mock).mockResolvedValue(true);
+    (replyExistsInAnyChain as jest.Mock).mockResolvedValue(true);
     const r = await ingestTaskResult({
       subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
       tweets: [{
@@ -84,8 +84,8 @@ describe('ingestTaskResult (spec §4.2)', () => {
       }],
     });
     expect(r.deduped).toBe(1);
-    expect(replyExistsInBscRelationReply).toHaveBeenCalledWith('1800000000000000006');
-    expect(tweetExistsInBscTweet).not.toHaveBeenCalled();
+    expect(replyExistsInAnyChain).toHaveBeenCalledWith('1800000000000000006');
+    expect(tweetExistsInAnyChain).not.toHaveBeenCalled();
     expect(insertPendingTweet).not.toHaveBeenCalled();
     expect(backupToAllTweets).not.toHaveBeenCalled();
   });
@@ -93,7 +93,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
   it('insertPendingTweet 返回 false（UNIQUE 重复）→ deduped++', async () => {
     (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX', topic_id: 't1' });
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
-    (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
+    (tweetExistsInAnyChain as jest.Mock).mockResolvedValue(false);
     (insertPendingTweet as jest.Mock).mockResolvedValue(false);
     const r = await ingestTaskResult({
       subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
@@ -107,7 +107,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
   it('推文不在 bsc_tweet → 写 pending + all_tweets，promoted++', async () => {
     (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX', topic_id: 't1' });
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
-    (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
+    (tweetExistsInAnyChain as jest.Mock).mockResolvedValue(false);
     (insertPendingTweet as jest.Mock).mockResolvedValue(true);
     const r = await ingestTaskResult({
       subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
@@ -135,13 +135,13 @@ describe('ingestTaskResult (spec §4.2)', () => {
   it('node 无绑定账号 → 推文不写 pending（跳过）', async () => {
     (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX' });
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: null, tagai_account_type: null });
-    (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
+    (tweetExistsInAnyChain as jest.Mock).mockResolvedValue(false);
     const r = await ingestTaskResult({
       subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',
       tweets: [{ tweet_id: '1800000000000000003', twitter_id: '9', content: 'hi', tweet_time: null }],
     });
     expect(insertPendingTweet).not.toHaveBeenCalled();
-    expect(tweetExistsInBscTweet).not.toHaveBeenCalled();
+    expect(tweetExistsInAnyChain).not.toHaveBeenCalled();
     expect(r.promoted).toBe(0);
     expect(r.skipped).toBe(1);
   });
@@ -149,7 +149,7 @@ describe('ingestTaskResult (spec §4.2)', () => {
   it('入库后推进 watermark，不再写 twitter cursor', async () => {
     (getSubtask as jest.Mock).mockResolvedValue({ tick: 'SPACEX', topic_id: 't1' });
     (findNodeById as jest.Mock).mockResolvedValue({ tagai_account: '111', tagai_account_type: 0 });
-    (tweetExistsInBscTweet as jest.Mock).mockResolvedValue(false);
+    (tweetExistsInAnyChain as jest.Mock).mockResolvedValue(false);
     (insertPendingTweet as jest.Mock).mockResolvedValue(true);
     const r = await ingestTaskResult({
       subtask_id: 's1', node_id: 'n1', assignment_id: 'asg_1', status: 'done',

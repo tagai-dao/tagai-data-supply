@@ -5,12 +5,25 @@
 ### 前置
 - Node.js >= 18
 - MySQL（复用 tiptag 库 `tiptag`）
-- 独立 DB 用户 `tds_writer`（权限：`bsc_tds_*` 全权 + `bsc_tweet` SELECT(tweet_id) + `all_tweets` INSERT）
+- 独立 DB 用户 `tds_writer`（权限：共享 `tds_*` 全权 + 全链 tweet/reply SELECT + `all_tweets` INSERT）
+- 表 rename / GRANT 见 `packages/relayer/migrations/017_tds_shared_tables_grants.sql`（与 tiptag-server `v16.sql` 对齐）
 
 ```sql
 CREATE USER 'tds_writer'@'%' IDENTIFIED BY '<pwd>';
-GRANT ALL PRIVILEGES ON tiptag.bsc_tds_* TO 'tds_writer'@'%';
+-- 共享 TDS 表（无链前缀）
+GRANT ALL PRIVILEGES ON tiptag.tds_node TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.tds_topic TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.tds_subtask TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.tds_assignment TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.tds_node_metric TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.tds_cookie_health_log TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.tds_invite TO 'tds_writer'@'%';
+GRANT ALL PRIVILEGES ON tiptag.tds_pending_tweet TO 'tds_writer'@'%';
+-- 全链去重
 GRANT SELECT (tweet_id) ON tiptag.bsc_tweet TO 'tds_writer'@'%';
+GRANT SELECT (tweet_id) ON tiptag.rh_tweet TO 'tds_writer'@'%';
+GRANT SELECT (reply_id) ON tiptag.bsc_relation_reply TO 'tds_writer'@'%';
+GRANT SELECT (reply_id) ON tiptag.rh_relation_reply TO 'tds_writer'@'%';
 GRANT INSERT ON tiptag.all_tweets TO 'tds_writer'@'%';
 FLUSH PRIVILEGES;
 ```
@@ -54,7 +67,7 @@ cd tiptag-server
 yarn start-tds-post-curation
 ```
 
-轮询 `bsc_tds_pending_tweet`，发帖入社区并策展（不扣 OP/VP）。
+轮询 `tds_pending_tweet`，发帖入社区并策展（不扣 OP/VP）。
 
 ## Node 部署（用户自部署）
 
@@ -143,10 +156,10 @@ curl http://<relayer>:7701/admin/stats -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
 ## 运维要点
-- **无状态**：relayer 调度状态全在 `bsc_tds_*`，重启自动 reconcile；抓取前沿由 `watermark_tweet_id` 接续。
+- **无状态**：relayer 调度状态全在 `tds_*`，重启自动 reconcile；抓取前沿由 `watermark_tweet_id` 接续。
 - **cookie 失效**：节点 `auth_failed` → `disabled` + 告警；用户本地更新 cookie 后 `tagai-node run` 重新 `hello`，或后台 `POST /admin/nodes/:id/reenable`。
 - **任务回收**：节点离线/disabled 时其 active assignment 自动 reclaim，调度器重派（各 Node 仍从 Latest 第一页 + 当前 watermark 开始）。
-- **数据保留**：`bsc_tds_cookie_health_log` 30d / `bsc_tds_node_metric` 90d，relayer 每日清理。
+- **数据保留**：`tds_cookie_health_log` 30d / `tds_node_metric` 90d，relayer 每日清理。
 - **已知限制**：relayer 单实例（主备 RPO/RTO 待评估）；任务重派重试上限（spec §10.2 限次3）尚未硬性强制，靠调度器自然重派。
 
 ## 已知风险（spec §16）

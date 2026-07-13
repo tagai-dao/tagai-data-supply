@@ -7,7 +7,7 @@ jest.mock('../../src/db/pool', () => ({
 }));
 
 import { pool } from '../../src/db/pool';
-import { tweetExistsInBscTweet, replyExistsInBscRelationReply, insertPendingTweet, buildAllTweetsContent, backupToAllTweets, mapIncomingToPending } from '../../src/db/pending';
+import { tweetExistsInAnyChain, replyExistsInAnyChain, insertPendingTweet, buildAllTweetsContent, backupToAllTweets, mapIncomingToPending } from '../../src/db/pending';
 
 beforeAll(() => {
   Object.assign(process.env, {
@@ -19,22 +19,35 @@ beforeAll(() => {
 beforeEach(() => jest.clearAllMocks());
 
 describe('pending DAL', () => {
-  it('tweetExistsInBscTweet: SELECT 1 返回 true', async () => {
+  it('tweetExistsInAnyChain: 首条链命中即 true', async () => {
     (pool.execute as jest.Mock).mockResolvedValueOnce([[{ '1': 1 }], []]);
-    const ok = await tweetExistsInBscTweet('123');
+    const ok = await tweetExistsInAnyChain('123');
     expect(ok).toBe(true);
+    expect(pool.execute).toHaveBeenCalledTimes(1);
     expect(pool.execute).toHaveBeenCalledWith('SELECT 1 FROM `bsc_tweet` WHERE tweet_id = ? LIMIT 1', ['123']);
   });
 
-  it('tweetExistsInBscTweet: 空结果返回 false', async () => {
-    (pool.execute as jest.Mock).mockResolvedValueOnce([[], []]);
-    const ok = await tweetExistsInBscTweet('123');
-    expect(ok).toBe(false);
+  it('tweetExistsInAnyChain: BSC 未命中但 RH 命中', async () => {
+    (pool.execute as jest.Mock)
+      .mockResolvedValueOnce([[], []])
+      .mockResolvedValueOnce([[{ '1': 1 }], []]);
+    const ok = await tweetExistsInAnyChain('123');
+    expect(ok).toBe(true);
+    expect(pool.execute).toHaveBeenNthCalledWith(2, 'SELECT 1 FROM `rh_tweet` WHERE tweet_id = ? LIMIT 1', ['123']);
   });
 
-  it('replyExistsInBscRelationReply: SELECT 1 返回 true', async () => {
+  it('tweetExistsInAnyChain: 全链未命中返回 false', async () => {
+    (pool.execute as jest.Mock)
+      .mockResolvedValueOnce([[], []])
+      .mockResolvedValueOnce([[], []]);
+    const ok = await tweetExistsInAnyChain('123');
+    expect(ok).toBe(false);
+    expect(pool.execute).toHaveBeenCalledTimes(2);
+  });
+
+  it('replyExistsInAnyChain: 首条链命中即 true', async () => {
     (pool.execute as jest.Mock).mockResolvedValueOnce([[{ '1': 1 }], []]);
-    const ok = await replyExistsInBscRelationReply('456');
+    const ok = await replyExistsInAnyChain('456');
     expect(ok).toBe(true);
     expect(pool.execute).toHaveBeenCalledWith(
       'SELECT 1 FROM `bsc_relation_reply` WHERE reply_id = ? LIMIT 1',
@@ -42,10 +55,13 @@ describe('pending DAL', () => {
     );
   });
 
-  it('replyExistsInBscRelationReply: 空结果返回 false', async () => {
-    (pool.execute as jest.Mock).mockResolvedValueOnce([[], []]);
-    const ok = await replyExistsInBscRelationReply('456');
+  it('replyExistsInAnyChain: 全链未命中返回 false', async () => {
+    (pool.execute as jest.Mock)
+      .mockResolvedValueOnce([[], []])
+      .mockResolvedValueOnce([[], []]);
+    const ok = await replyExistsInAnyChain('456');
     expect(ok).toBe(false);
+    expect(pool.execute).toHaveBeenCalledTimes(2);
   });
 
   it('insertPendingTweet: INSERT pending 行', async () => {
@@ -56,7 +72,7 @@ describe('pending DAL', () => {
       topic_id: 't1', subtask_id: 's1', tick: 'SPACEX',
     });
     const sql = (pool.execute as jest.Mock).mock.calls[0][0];
-    expect(sql).toContain('INSERT IGNORE INTO `bsc_tds_pending_tweet`');
+    expect(sql).toContain('INSERT IGNORE INTO `tds_pending_tweet`');
     expect(sql).toContain('kind');
   });
 

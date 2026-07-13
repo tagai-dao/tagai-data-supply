@@ -43,13 +43,13 @@ export interface AssignmentRow {
 
 export async function createTopic(topic_id: string, name: string, tick: string = NO_TICK_SENTINEL): Promise<void> {
   await pool.execute(
-    'INSERT INTO `bsc_tds_topic` (topic_id, name, enabled, tick) VALUES (?, ?, 1, ?)',
+    'INSERT INTO `tds_topic` (topic_id, name, enabled, tick) VALUES (?, ?, 1, ?)',
     [topic_id, name, tick],
   );
 }
 
 export async function listTopics(): Promise<TopicRow[]> {
-  const [rows] = await pool.execute<any[]>('SELECT * FROM `bsc_tds_topic` ORDER BY created_at');
+  const [rows] = await pool.execute<any[]>('SELECT * FROM `tds_topic` ORDER BY created_at');
   return rows as TopicRow[];
 }
 
@@ -78,7 +78,7 @@ export function validateSubtaskTick(tick: string | undefined | null): string {
 export async function createSubtask(input: CreateSubtaskInput): Promise<void> {
   const tick = validateSubtaskTick(input.tick);
   await pool.execute(
-    `INSERT INTO \`bsc_tds_subtask\`
+    `INSERT INTO \`tds_subtask\`
      (subtask_id, topic_id, type, mode, params, priority, tick, schedule_cron, window_minutes, enabled)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
     [
@@ -98,8 +98,8 @@ export async function createSubtask(input: CreateSubtaskInput): Promise<void> {
 export async function listEnabledSubtasks(): Promise<SubtaskRow[]> {
   // 联动 topic.enabled：主题禁用时其下子任务也不派发（spec §7 配置驱动）
   const [rows] = await pool.execute<any[]>(
-    `SELECT s.* FROM \`bsc_tds_subtask\` s
-     INNER JOIN \`bsc_tds_topic\` t ON s.topic_id = t.topic_id
+    `SELECT s.* FROM \`tds_subtask\` s
+     INNER JOIN \`tds_topic\` t ON s.topic_id = t.topic_id
      WHERE s.enabled = 1 AND t.enabled = 1
      ORDER BY s.priority DESC, s.created_at`,
   );
@@ -108,7 +108,7 @@ export async function listEnabledSubtasks(): Promise<SubtaskRow[]> {
 
 export async function getSubtask(subtask_id: string): Promise<SubtaskRow | null> {
   const [rows] = await pool.execute<any[]>(
-    'SELECT * FROM `bsc_tds_subtask` WHERE subtask_id = ? LIMIT 1',
+    'SELECT * FROM `tds_subtask` WHERE subtask_id = ? LIMIT 1',
     [subtask_id],
   );
   return rows[0] ? normalizeSubtask(rows[0]) : null;
@@ -123,7 +123,7 @@ function normalizeSubtask(r: any): SubtaskRow {
 // 已废弃：Twitter 分页游标不再持久化；保留函数仅供历史数据/手工运维。
 export async function updateSubtaskCursor(subtask_id: string, cursor: string | null, owner_node: string | null): Promise<void> {
   await pool.execute(
-    'UPDATE `bsc_tds_subtask` SET `cursor` = ?, cursor_owner_node = ? WHERE subtask_id = ?',
+    'UPDATE `tds_subtask` SET `cursor` = ?, cursor_owner_node = ? WHERE subtask_id = ?',
     [cursor, owner_node, subtask_id],
   );
 }
@@ -132,7 +132,7 @@ export async function updateSubtaskCursor(subtask_id: string, cursor: string | n
 export async function updateSubtaskWatermark(subtask_id: string, tweet_id: string): Promise<void> {
   if (!tweet_id || !/^\d{15,20}$/.test(tweet_id)) return;
   await pool.execute(
-    `UPDATE \`bsc_tds_subtask\`
+    `UPDATE \`tds_subtask\`
      SET watermark_tweet_id = ?
      WHERE subtask_id = ?
        AND (watermark_tweet_id IS NULL OR CAST(watermark_tweet_id AS UNSIGNED) < CAST(? AS UNSIGNED))`,
@@ -142,7 +142,7 @@ export async function updateSubtaskWatermark(subtask_id: string, tweet_id: strin
 
 export async function setSubtaskEnabled(subtask_id: string, enabled: boolean): Promise<void> {
   await pool.execute(
-    'UPDATE `bsc_tds_subtask` SET enabled = ? WHERE subtask_id = ?',
+    'UPDATE `tds_subtask` SET enabled = ? WHERE subtask_id = ?',
     [enabled ? 1 : 0, subtask_id],
   );
 }
@@ -151,7 +151,7 @@ export async function setSubtaskEnabled(subtask_id: string, enabled: boolean): P
 
 export async function createAssignment(assignment_id: string, subtask_id: string, node_id: string): Promise<void> {
   await pool.execute(
-    `INSERT INTO \`bsc_tds_assignment\` (assignment_id, subtask_id, node_id, status, last_run_at)
+    `INSERT INTO \`tds_assignment\` (assignment_id, subtask_id, node_id, status, last_run_at)
      VALUES (?, ?, ?, 'assigned', NOW())`,
     [assignment_id, subtask_id, node_id],
   );
@@ -159,7 +159,7 @@ export async function createAssignment(assignment_id: string, subtask_id: string
 
 export async function setAssignmentStatus(assignment_id: string, status: AssignmentRow['status'], summary?: object): Promise<void> {
   await pool.execute(
-    'UPDATE `bsc_tds_assignment` SET status = ?, result_summary = ? WHERE assignment_id = ?',
+    'UPDATE `tds_assignment` SET status = ?, result_summary = ? WHERE assignment_id = ?',
     [status, summary ? JSON.stringify(summary) : null, assignment_id],
   );
 }
@@ -167,7 +167,7 @@ export async function setAssignmentStatus(assignment_id: string, status: Assignm
 // spec §8.1: 节点是否有在执行的任务（单节点串行）
 export async function getNodeActiveAssignment(node_id: string): Promise<AssignmentRow | null> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT * FROM `bsc_tds_assignment` WHERE node_id = ? AND status IN ('assigned','running') ORDER BY assigned_at DESC LIMIT 1",
+    "SELECT * FROM `tds_assignment` WHERE node_id = ? AND status IN ('assigned','running') ORDER BY assigned_at DESC LIMIT 1",
     [node_id],
   );
   return (rows[0] as AssignmentRow) ?? null;
@@ -175,7 +175,7 @@ export async function getNodeActiveAssignment(node_id: string): Promise<Assignme
 
 export async function getAssignmentById(assignment_id: string): Promise<AssignmentRow | null> {
   const [rows] = await pool.execute<any[]>(
-    'SELECT * FROM `bsc_tds_assignment` WHERE assignment_id = ? LIMIT 1',
+    'SELECT * FROM `tds_assignment` WHERE assignment_id = ? LIMIT 1',
     [assignment_id],
   );
   return (rows[0] as AssignmentRow) ?? null;
@@ -183,7 +183,7 @@ export async function getAssignmentById(assignment_id: string): Promise<Assignme
 
 export async function addAssignmentAcceptedCount(assignment_id: string, delta: number): Promise<number> {
   await pool.execute(
-    'UPDATE `bsc_tds_assignment` SET accepted_count = accepted_count + ? WHERE assignment_id = ?',
+    'UPDATE `tds_assignment` SET accepted_count = accepted_count + ? WHERE assignment_id = ?',
     [delta, assignment_id],
   );
   const row = await getAssignmentById(assignment_id);
@@ -192,7 +192,7 @@ export async function addAssignmentAcceptedCount(assignment_id: string, delta: n
 
 export async function getAssignmentBySubtaskAndNode(subtask_id: string, node_id: string): Promise<AssignmentRow | null> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT * FROM `bsc_tds_assignment` WHERE subtask_id = ? AND node_id = ? AND status IN ('assigned','running') LIMIT 1",
+    "SELECT * FROM `tds_assignment` WHERE subtask_id = ? AND node_id = ? AND status IN ('assigned','running') LIMIT 1",
     [subtask_id, node_id],
   );
   return (rows[0] as AssignmentRow) ?? null;
@@ -208,7 +208,7 @@ export interface StaleAssignmentRow {
 /** 列出超时未完结的 active assignment */
 export async function listStaleActiveAssignments(timeoutSec: number): Promise<StaleAssignmentRow[]> {
   const [rows] = await pool.execute<any[]>(
-    `SELECT assignment_id, subtask_id, node_id FROM \`bsc_tds_assignment\`
+    `SELECT assignment_id, subtask_id, node_id FROM \`tds_assignment\`
      WHERE status IN ('assigned','running')
        AND assigned_at < DATE_SUB(NOW(), INTERVAL ? SECOND)`,
     [timeoutSec],
@@ -219,7 +219,7 @@ export async function listStaleActiveAssignments(timeoutSec: number): Promise<St
 /** 将单条 active assignment 标为 reclaimed（乐观锁：仅 assigned/running） */
 export async function reclaimAssignmentById(assignment_id: string, reason: string): Promise<boolean> {
   const [res] = await pool.execute<any>(
-    `UPDATE \`bsc_tds_assignment\` SET status = 'reclaimed', result_summary = ?
+    `UPDATE \`tds_assignment\` SET status = 'reclaimed', result_summary = ?
      WHERE assignment_id = ? AND status IN ('assigned','running')`,
     [JSON.stringify({ reason }), assignment_id],
   );
@@ -228,7 +228,7 @@ export async function reclaimAssignmentById(assignment_id: string, reason: strin
 
 export async function getSubtaskLastRunMap(): Promise<Map<string, Date | null>> {
   const [rows] = await pool.execute<any[]>(
-    "SELECT subtask_id, MAX(last_run_at) AS last_run FROM `bsc_tds_assignment` GROUP BY subtask_id",
+    "SELECT subtask_id, MAX(last_run_at) AS last_run FROM `tds_assignment` GROUP BY subtask_id",
   );
   const m = new Map<string, Date | null>();
   for (const r of rows) m.set(r.subtask_id, r.last_run ?? null);

@@ -1,5 +1,8 @@
-// spec §5.1: 硬编码 bsc_ 前缀（与 tagai-api 一致）
-export const TWEET_TABLE = 'bsc_tweet';
+// 业务链表（按链分表）；TDS 基础设施表为共享 tds_*，无链前缀
+export const TWEET_TABLE = 'bsc_tweet'; // verify-schema / 遗留 insert 默认表
+/** 全链去重：任一链已入库则跳过 pending */
+export const TWEET_TABLES = ['bsc_tweet', 'rh_tweet'] as const;
+export const RELATION_REPLY_TABLES = ['bsc_relation_reply', 'rh_relation_reply'] as const;
 
 // spec §5.1: 无社区归属时的 tick 哨兵
 export const NO_TICK_SENTINEL = 'no-tick-of-tiptag';

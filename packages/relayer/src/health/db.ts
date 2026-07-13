@@ -7,7 +7,7 @@ import { TASK_MAX_RETRIES, RETENTION } from '../config/constants';
 // 读取节点健康状态（从 DB 重建内存视图）
 export async function getNodeHealth(node_id: string): Promise<HealthState | null> {
   const [rows] = await pool.execute<any[]>(
-    'SELECT cookie_health, status FROM `bsc_tds_node` WHERE node_id = ?',
+    'SELECT cookie_health, status FROM `tds_node` WHERE node_id = ?',
     [node_id],
   );
   const r = rows[0];
@@ -28,11 +28,11 @@ export async function applyCookieEvent(node_id: string, event: CookieEvent, deta
   const upd = applyEvent(state, event, now);
 
   await pool.execute(
-    'UPDATE `bsc_tds_node` SET cookie_health = ?, status = ? WHERE node_id = ?',
+    'UPDATE `tds_node` SET cookie_health = ?, status = ? WHERE node_id = ?',
     [upd.health, upd.status, node_id],
   );
   await pool.execute(
-    'INSERT INTO `bsc_tds_cookie_health_log` (node_id, event, detail) VALUES (?, ?, ?)',
+    'INSERT INTO `tds_cookie_health_log` (node_id, event, detail) VALUES (?, ?, ?)',
     [node_id, event, detail ?? null],
   ).catch(() => {});
 
@@ -51,7 +51,7 @@ export async function applyCookieEvent(node_id: string, event: CookieEvent, deta
 export async function reEnableNode(node_id: string): Promise<void> {
   const upd = reEnableHealth();
   await pool.execute(
-    'UPDATE `bsc_tds_node` SET cookie_health = ?, status = ? WHERE node_id = ?',
+    'UPDATE `tds_node` SET cookie_health = ?, status = ? WHERE node_id = ?',
     [upd.health as number, upd.status as string, node_id] as any[],
   );
 }
@@ -59,7 +59,7 @@ export async function reEnableNode(node_id: string): Promise<void> {
 // spec §10.2: 回收节点的 active assignment（标记 reclaimed，使 subtask 可重派）
 export async function reclaimNodeAssignments(node_id: string): Promise<number> {
   const [res] = await pool.execute<any>(
-    "UPDATE `bsc_tds_assignment` SET status = 'reclaimed' WHERE node_id = ? AND status IN ('assigned','running')",
+    "UPDATE `tds_assignment` SET status = 'reclaimed' WHERE node_id = ? AND status IN ('assigned','running')",
     [node_id],
   );
   const affected = res.affectedRows ?? 0;
@@ -69,8 +69,8 @@ export async function reclaimNodeAssignments(node_id: string): Promise<number> {
 
 // spec §5.5: 数据保留清理 job
 export async function cleanupRetainedData(): Promise<void> {
-  await pool.execute(`DELETE FROM \`bsc_tds_cookie_health_log\` WHERE ts < DATE_SUB(NOW(), INTERVAL ${RETENTION.cookie_health_log} DAY)`);
-  await pool.execute(`DELETE FROM \`bsc_tds_node_metric\` WHERE date < DATE_SUB(CURDATE(), INTERVAL ${RETENTION.node_metric} DAY)`);
+  await pool.execute(`DELETE FROM \`tds_cookie_health_log\` WHERE ts < DATE_SUB(NOW(), INTERVAL ${RETENTION.cookie_health_log} DAY)`);
+  await pool.execute(`DELETE FROM \`tds_node_metric\` WHERE date < DATE_SUB(CURDATE(), INTERVAL ${RETENTION.node_metric} DAY)`);
   logger.info('retained data cleanup done');
 }
 

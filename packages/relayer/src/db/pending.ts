@@ -1,23 +1,37 @@
 import { pool } from './pool';
 import { logger } from '../utils/logger';
 
-// spec §4.2: 先查 bsc_tweet 是否已存在
-export async function tweetExistsInBscTweet(tweet_id: string): Promise<boolean> {
-  const [rows] = await pool.execute<any[]>(
-    'SELECT 1 FROM `bsc_tweet` WHERE tweet_id = ? LIMIT 1',
-    [tweet_id],
-  );
-  return rows.length > 0;
+import { TWEET_TABLES, RELATION_REPLY_TABLES } from '../config/constants';
+
+/** 任一产品链的 tweet 表已有该帖 → 无需再进 pending */
+export async function tweetExistsInAnyChain(tweet_id: string): Promise<boolean> {
+  for (const table of TWEET_TABLES) {
+    const [rows] = await pool.execute<any[]>(
+      `SELECT 1 FROM \`${table}\` WHERE tweet_id = ? LIMIT 1`,
+      [tweet_id],
+    );
+    if (rows.length > 0) return true;
+  }
+  return false;
 }
 
-// reply 已在 bsc_relation_reply（reply_id = 推文 id）→ 无需再进 pending
-export async function replyExistsInBscRelationReply(reply_id: string): Promise<boolean> {
-  const [rows] = await pool.execute<any[]>(
-    'SELECT 1 FROM `bsc_relation_reply` WHERE reply_id = ? LIMIT 1',
-    [reply_id],
-  );
-  return rows.length > 0;
+/** @deprecated 使用 tweetExistsInAnyChain */
+export const tweetExistsInBscTweet = tweetExistsInAnyChain;
+
+/** 任一产品链的 relation_reply 已有该 reply_id → 无需再进 pending */
+export async function replyExistsInAnyChain(reply_id: string): Promise<boolean> {
+  for (const table of RELATION_REPLY_TABLES) {
+    const [rows] = await pool.execute<any[]>(
+      `SELECT 1 FROM \`${table}\` WHERE reply_id = ? LIMIT 1`,
+      [reply_id],
+    );
+    if (rows.length > 0) return true;
+  }
+  return false;
 }
+
+/** @deprecated 使用 replyExistsInAnyChain */
+export const replyExistsInBscRelationReply = replyExistsInAnyChain;
 
 export interface PendingTweet {
   tweet_id: string;
@@ -79,7 +93,7 @@ function toJsonText(v: unknown): string | null {
 // spec §4.2: 写 pending 表（UNIQUE tweet_id 兜底，INSERT IGNORE）
 export async function insertPendingTweet(p: PendingTweet): Promise<boolean> {
   const [res] = await pool.execute(
-    `INSERT IGNORE INTO \`bsc_tds_pending_tweet\`
+    `INSERT IGNORE INTO \`tds_pending_tweet\`
      (tweet_id, kind, tweet_type, twitter_id, twitter_username, twitter_name, profile,
       followers, followings, tweet_count, like_count, listed_count, verified,
       reply_count, view_count,
@@ -268,8 +282,8 @@ export async function backupToAllTweets(tweet_id: string, content: string): Prom
 export async function listPending(status: number | null, limit = 100, offset = 0): Promise<any[]> {
   const base = `
     SELECT p.*, n.label AS node_label, n.tagai_username AS tagai_username
-    FROM \`bsc_tds_pending_tweet\` p
-    LEFT JOIN \`bsc_tds_node\` n ON p.node_id = n.node_id`;
+    FROM \`tds_pending_tweet\` p
+    LEFT JOIN \`tds_node\` n ON p.node_id = n.node_id`;
   const sql = status !== null
     ? `${base} WHERE p.status = ? ORDER BY p.id DESC LIMIT ? OFFSET ?`
     : `${base} ORDER BY p.id DESC LIMIT ? OFFSET ?`;
@@ -280,7 +294,7 @@ export async function listPending(status: number | null, limit = 100, offset = 0
 
 export async function retryPending(id: number): Promise<boolean> {
   const [res] = await pool.execute(
-    "UPDATE `bsc_tds_pending_tweet` SET status = 0, last_error = NULL, retry_count = 0 WHERE id = ? AND status = 3",
+    "UPDATE `tds_pending_tweet` SET status = 0, last_error = NULL, retry_count = 0 WHERE id = ? AND status = 3",
     [id],
   );
   return (res as any).affectedRows > 0;

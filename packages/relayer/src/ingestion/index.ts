@@ -1,5 +1,5 @@
 // spec §4/§5/§13: 回传数据处理
-// 流程：校验 assignment → 先查 bsc_tweet → 写 pending 表 + all_tweets 备份 → 推进 watermark → metrics
+// 流程：校验 assignment → 先查全链 tweet 表 → 写 pending 表 + all_tweets 备份 → 推进 watermark → metrics
 
 import { pool } from '../db/pool';
 import { findNodeById } from '../db/client';
@@ -8,7 +8,7 @@ import {
   updateSubtaskWatermark,
 } from '../db/tasks';
 import {
-  tweetExistsInBscTweet, replyExistsInBscRelationReply,
+  tweetExistsInAnyChain, replyExistsInAnyChain,
   insertPendingTweet, backupToAllTweets, buildAllTweetsContent, mapIncomingToPending,
 } from '../db/pending';
 import { NO_TICK_SENTINEL, ASSIGNMENT_MAX_TWEETS } from '../config/constants';
@@ -116,13 +116,13 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
       }
 
       // reply 已在 relation_reply → 跳过 pending 及后续策展
-      if (isIncomingReply(tw) && await replyExistsInBscRelationReply(tw.tweet_id)) {
+      if (isIncomingReply(tw) && await replyExistsInAnyChain(tw.tweet_id)) {
         deduped++;
         continue;
       }
 
-      // spec §4.2: 先查 bsc_tweet 是否已存在（原推/引用）
-      if (await tweetExistsInBscTweet(tw.tweet_id)) { deduped++; continue; }
+      // spec §4.2: 先查全链 tweet 表 是否已存在（原推/引用）
+      if (await tweetExistsInAnyChain(tw.tweet_id)) { deduped++; continue; }
 
       // 写 pending 表 + all_tweets 备份
       const pendingRow = mapIncomingToPending(tw, {
@@ -199,7 +199,7 @@ export async function ingestTaskResult(input: TaskResultInput): Promise<IngestRe
 
 async function bumpMetric(node_id: string, promoted: number, deduped: number, errors: number): Promise<void> {
   await pool.execute(
-    `INSERT INTO \`bsc_tds_node_metric\` (node_id, date, fetched_count, deduped_count, error_count)
+    `INSERT INTO \`tds_node_metric\` (node_id, date, fetched_count, deduped_count, error_count)
      VALUES (?, CURRENT_DATE, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        fetched_count = fetched_count + VALUES(fetched_count),
