@@ -14,6 +14,7 @@ except ImportError:  # websockets 可选（测试可 mock）
     ConnectionClosed = Exception
 
 from ..version import get_version
+from ..http_util import ssl_context
 from .protocol import (
     PROTOCOL_VERSION, Hello, AuthAck, MessageType, CookieStatus,
 )
@@ -89,10 +90,14 @@ class NodeClient:
             if websockets is None:
                 raise RuntimeError("websockets not installed")
             # proxy=None 禁用系统代理（macOS 下会读到 SOCKS 代理导致连接失败）
+            # wss 显式传入 certifi CA，避免 PyInstaller 二进制校验失败
+            connect_kw: dict = {"max_size": None}
+            if self.relayer_url.startswith("wss://"):
+                connect_kw["ssl"] = ssl_context()
             try:
-                ws = await websockets.connect(self.relayer_url, max_size=None, proxy=None)
+                ws = await websockets.connect(self.relayer_url, proxy=None, **connect_kw)
             except TypeError:  # 旧版 websockets 无 proxy 参数
-                ws = await websockets.connect(self.relayer_url, max_size=None)
+                ws = await websockets.connect(self.relayer_url, **connect_kw)
         try:
             await self._handshake(ws)
             await self._serve(ws)
