@@ -139,13 +139,20 @@ class TwikitScraper:
 
     def _format_error(self, e: Exception) -> str:
         msg = str(e).strip()
-        if msg:
-            return f"{type(e).__name__}: {msg}"
-        return f"{type(e).__name__}({repr(e)})"
+        filename = getattr(e, "filename", None)
+        if filename:
+            detail = f"{type(e).__name__}: {msg} path={filename!r}"
+        elif msg:
+            detail = f"{type(e).__name__}: {msg}"
+        else:
+            detail = f"{type(e).__name__}({repr(e)})"
+        return detail
 
     def _classify_error(self, e: Exception) -> str:
         msg = str(e).lower()
         name = type(e).__name__.lower()
+        if isinstance(e, FileNotFoundError) or "no such file" in msg:
+            return "runtime_error"
         if "timeout" in msg or "timeout" in name:
             return "network_error"
         if "rate" in msg or "429" in msg:

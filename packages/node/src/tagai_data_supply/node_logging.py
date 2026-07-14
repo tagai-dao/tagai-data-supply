@@ -142,6 +142,17 @@ def start_daemon(
         extra_args=extra_args,
     )
 
+    # 勿继承父进程 SSL_CERT_*：冻结二进制的 _MEI 目录在父进程退出后会失效，
+    # 子进程若沿用会触发 httpx FileNotFoundError（twikit 抓取失败）。
+    child_env = os.environ.copy()
+    for key in (
+        "SSL_CERT_FILE",
+        "SSL_CERT_DIR",
+        "REQUESTS_CA_BUNDLE",
+        "CURL_CA_BUNDLE",
+    ):
+        child_env.pop(key, None)
+
     # 启动期错误写入同一日志，避免假成功后静默退出
     err_fh = open(log_file, "a", encoding="utf-8")
     try:
@@ -151,6 +162,7 @@ def start_daemon(
             stdout=subprocess.DEVNULL,
             stderr=err_fh,
             start_new_session=True,
+            env=child_env,
         )
     finally:
         err_fh.close()
