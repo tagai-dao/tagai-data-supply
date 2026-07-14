@@ -27,15 +27,17 @@ curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/sc
 从 [GitHub Releases](https://github.com/tagai-dao/tagai-data-supply/releases) 下载对应平台文件，放入 PATH：
 
 ```bash
-# 示例：macOS Apple Silicon（当前最新 0.1.1）
+# 示例：macOS Apple Silicon（当前最新 0.1.7）
 mkdir -p ~/bin
 curl -fsSL -o ~/bin/tagai-node \
-  "https://github.com/tagai-dao/tagai-data-supply/releases/download/node-v0.1.1/tagai-node-darwin-arm64"
+  "https://github.com/tagai-dao/tagai-data-supply/releases/download/node-v0.1.7/tagai-node-darwin-arm64"
 chmod +x ~/bin/tagai-node
 export PATH="$HOME/bin:$PATH"
 tagai-node setup
 ```
 
+Intel Mac（包括 2018 年及更早的 Mac mini）用 `tagai-node-darwin-amd64`，
+Apple Silicon Mac 用 `tagai-node-darwin-arm64`。Intel 版本以 macOS 10.15 为最低部署目标。
 Linux x64 用 `tagai-node-linux-amd64`，Windows 用 `tagai-node-windows-amd64.exe`。
 
 更新：`tagai-node update`（会先 stop 再下载替换二进制）。

@@ -1,6 +1,6 @@
 [project]
 name = "tagai-data-supply-node"
-version = "0.1.6"
+version = "0.1.7"
 description = "tagai-data-supply 抓取节点（用户自部署）"
 readme = "README.md"
 license = { text = "MIT" }

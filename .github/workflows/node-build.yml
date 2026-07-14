@@ -14,10 +14,20 @@ jobs:
         include:
           - os: ubuntu-latest
             asset: tagai-node-linux-amd64
+            expected_arch: x86_64
           - os: macos-latest
             asset: tagai-node-darwin-arm64
+            expected_arch: arm64
+            macos_deployment_target: '11.0'
+          # 2018 and earlier Intel Macs (including the 2014 Mac mini sold in 2015)
+          # need a native x86_64 binary. macos-latest is an arm64 runner.
+          - os: macos-15-intel
+            asset: tagai-node-darwin-amd64
+            expected_arch: x86_64
+            macos_deployment_target: '10.15'
           - os: windows-latest
             asset: tagai-node-windows-amd64.exe
+            expected_arch: x86_64
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -44,7 +54,20 @@ jobs:
         run: ${{ env.VENV_PYTHON }} -m pytest -q
       - name: Build (PyInstaller)
         shell: bash
+        env:
+          # Keep the Intel binary usable on Catalina through Monterey instead
+          # of inheriting the macOS 15 runner's deployment target.
+          MACOSX_DEPLOYMENT_TARGET: ${{ matrix.macos_deployment_target }}
         run: ${{ env.VENV_PYTHON }} -m PyInstaller tagai-node.spec --noconfirm
+      - name: Verify macOS architecture and executable
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          actual_arch="$(lipo -archs dist/tagai-node)"
+          test "$actual_arch" = "${{ matrix.expected_arch }}"
+          file dist/tagai-node
+          otool -l dist/tagai-node | grep -A 3 -E 'LC_BUILD_VERSION|LC_VERSION_MIN_MACOSX' || true
+          dist/tagai-node --version
       - name: Rename and checksum
         shell: bash
         run: |
