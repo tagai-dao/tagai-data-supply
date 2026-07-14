@@ -8,8 +8,32 @@ from tagai_data_supply.node_logging import (
     clear_pid,
     is_process_alive,
     tail_log_file,
+    build_daemon_cmd,
 )
 from tagai_data_supply.status_reporter import build_status_broadcast
+
+
+def test_build_daemon_cmd_frozen():
+    cmd = build_daemon_cmd(log_file=Path("/tmp/n.log"), status_interval=300, frozen=True)
+    assert cmd[1:] == [
+        "run",
+        "--foreground",
+        "--log-file=/tmp/n.log",
+        "--status-interval=300",
+    ]
+    assert "-m" not in cmd
+
+
+def test_build_daemon_cmd_source():
+    cmd = build_daemon_cmd(log_file=Path("/tmp/n.log"), status_interval=60, frozen=False)
+    assert cmd[1:] == [
+        "-m",
+        "tagai_data_supply",
+        "run",
+        "--foreground",
+        "--log-file=/tmp/n.log",
+        "--status-interval=60",
+    ]
 
 
 def test_setup_node_logging_writes_file(tmp_path, monkeypatch):

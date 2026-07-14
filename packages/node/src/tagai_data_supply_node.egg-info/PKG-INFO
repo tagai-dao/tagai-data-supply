@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: tagai-data-supply-node
-Version: 0.1.1
+Version: 0.1.4
 Summary: tagai-data-supply 抓取节点（用户自部署）
 License: MIT
 Requires-Python: >=3.10
@@ -23,23 +23,37 @@ tagai-data-supply 的抓取节点。
 
 ## 安装
 
-需要 **Python ≥ 3.10** 仅用于从源码/ pip 安装；**推荐直接使用 GitHub Release 二进制**（无需 Python）。
+**一条命令（推荐，无需 Python）：**
 
-### 方式 A：二进制（推荐）
+```bash
+curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/scripts/install-node.sh | bash
+```
+
+脚本会自动：检测平台 → 从 Relayer 获取最新版 → 下载二进制到 `~/.local/bin` → **写入 `~/.zshrc` PATH** → 进入 `tagai-node setup` 向导。
+
+安装后请执行 `source ~/.zshrc`（或新开终端），再使用 `tagai-node`。
+
+已配置过的用户，一条命令后台运行：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/scripts/install-node.sh | bash -s -- run -d
+```
+
+### 方式 A：手动下载二进制
 
 从 [GitHub Releases](https://github.com/tagai-dao/tagai-data-supply/releases) 下载对应平台文件，放入 PATH：
 
 ```bash
-# 示例：Linux x64
-curl -L -o ~/bin/tagai-node \
-  "https://github.com/tagai-dao/tagai-data-supply/releases/download/node-v0.1.0/tagai-node-linux-amd64"
+# 示例：macOS Apple Silicon（当前最新 0.1.1）
+mkdir -p ~/bin
+curl -fsSL -o ~/bin/tagai-node \
+  "https://github.com/tagai-dao/tagai-data-supply/releases/download/node-v0.1.1/tagai-node-darwin-arm64"
 chmod +x ~/bin/tagai-node
 export PATH="$HOME/bin:$PATH"
-tagai-node -v
 tagai-node setup
 ```
 
-macOS 用 `tagai-node-darwin-arm64`，Windows 用 `tagai-node-windows-amd64.exe`。
+Linux x64 用 `tagai-node-linux-amd64`，Windows 用 `tagai-node-windows-amd64.exe`。
 
 更新：`tagai-node update`（会先 stop 再下载替换二进制）。
 
@@ -65,19 +79,16 @@ tagai-node test-scraper
 
 ## 使用
 
-需要先从 Relayer 管理员处获取一个一次性邀请码。
+需要先从 Relayer 管理员处获取一个一次性邀请码。`setup` 向导会引导完成全部配置（收益账号 + 抓取 cookie），**无需再单独 configure/login**。
 
 ```bash
-# 1. 配置 Relayer 地址并用邀请码注册
-tagai-node configure --http-base http://<relayer-host>:<port> --invite-secret <邀请码>
+# 首次：安装脚本已自动进入 setup；或手动
+tagai-node setup
 
-# 2. 填入推特 cookie（ct0 / auth_token）
-tagai-node login
-
-# 3. 常驻运行（前台，日志同时输出到终端和文件）
+# 常驻运行（前台）
 tagai-node run
 
-# 或后台运行（关闭终端也不影响）
+# 后台运行（关闭终端也不影响）
 tagai-node run -d
 
 # 查看实时日志

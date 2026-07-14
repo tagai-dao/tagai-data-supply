@@ -90,6 +90,37 @@ def clear_pid() -> None:
         pass
 
 
+def build_daemon_cmd(
+    *,
+    log_file: Path,
+    status_interval: int,
+    extra_args: list[str] | None = None,
+    frozen: bool | None = None,
+) -> list[str]:
+    """构造后台子进程命令。
+
+    PyInstaller 冻结二进制无 -m，必须直接：tagai-node run --foreground ...
+    源码/pip 安装则：python -m tagai_data_supply run --foreground ...
+    """
+    if frozen is None:
+        from .platform_detect import is_frozen_binary
+        frozen = is_frozen_binary()
+
+    if frozen:
+        cmd = [sys.executable, "run"]
+    else:
+        cmd = [sys.executable, "-m", "tagai_data_supply", "run"]
+
+    cmd.extend([
+        "--foreground",
+        f"--log-file={log_file}",
+        f"--status-interval={status_interval}",
+    ])
+    if extra_args:
+        cmd.extend(extra_args)
+    return cmd
+
+
 def start_daemon(
     *,
     log_file: Path,
@@ -101,22 +132,37 @@ def start_daemon(
     if pid and is_process_alive(pid):
         raise RuntimeError(f"节点已在运行 (pid={pid})")
 
-    cmd = [
-        sys.executable, "-m", "tagai_data_supply", "run",
-        "--foreground",
-        f"--log-file={log_file}",
-        f"--status-interval={status_interval}",
-    ]
-    if extra_args:
-        cmd.extend(extra_args)
+    ensure_config_dir()
+    log_file = Path(log_file)
+    log_file.parent.mkdir(parents=True, exist_ok=True)
 
-    proc = subprocess.Popen(
-        cmd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        start_new_session=True,
+    cmd = build_daemon_cmd(
+        log_file=log_file,
+        status_interval=status_interval,
+        extra_args=extra_args,
     )
+
+    # 启动期错误写入同一日志，避免假成功后静默退出
+    err_fh = open(log_file, "a", encoding="utf-8")
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=err_fh,
+            start_new_session=True,
+        )
+    finally:
+        err_fh.close()
+
+    # PyInstaller 参数错误时常立刻退出：短暂等待再确认存活
+    time.sleep(0.8)
+    if proc.poll() is not None or not is_process_alive(proc.pid):
+        clear_pid()
+        raise RuntimeError(
+            f"后台进程启动失败 (exit={proc.returncode})，请查看日志: {log_file}"
+        )
+
     write_pid(proc.pid)
     return proc.pid
 
