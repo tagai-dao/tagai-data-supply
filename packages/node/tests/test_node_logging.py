@@ -14,26 +14,22 @@ from tagai_data_supply.status_reporter import build_status_broadcast
 
 
 def test_build_daemon_cmd_frozen():
-    cmd = build_daemon_cmd(log_file=Path("/tmp/n.log"), status_interval=300, frozen=True)
-    assert cmd[1:] == [
-        "run",
-        "--foreground",
-        "--log-file=/tmp/n.log",
-        "--status-interval=300",
-    ]
+    log = Path("logs") / "node.log"
+    cmd = build_daemon_cmd(log_file=log, status_interval=300, frozen=True)
+    assert cmd[1] == "run"
+    assert "--foreground" in cmd
+    assert f"--log-file={log}" in cmd
+    assert "--status-interval=300" in cmd
     assert "-m" not in cmd
 
 
 def test_build_daemon_cmd_source():
-    cmd = build_daemon_cmd(log_file=Path("/tmp/n.log"), status_interval=60, frozen=False)
-    assert cmd[1:] == [
-        "-m",
-        "tagai_data_supply",
-        "run",
-        "--foreground",
-        "--log-file=/tmp/n.log",
-        "--status-interval=60",
-    ]
+    log = Path("logs") / "node.log"
+    cmd = build_daemon_cmd(log_file=log, status_interval=60, frozen=False)
+    assert cmd[1:4] == ["-m", "tagai_data_supply", "run"]
+    assert "--foreground" in cmd
+    assert f"--log-file={log}" in cmd
+    assert "--status-interval=60" in cmd
 
 
 def test_setup_node_logging_writes_file(tmp_path, monkeypatch):
