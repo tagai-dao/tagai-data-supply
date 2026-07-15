@@ -1,8 +1,22 @@
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from tagai_data_supply.scraper.twikit_scraper import TwikitScraper
+
+
+@pytest.mark.asyncio
+async def test_search_hashtag_normalizes_legacy_cashtag_query():
+    scraper = TwikitScraper(ct0="x", auth_token="y")
+    client = MagicMock()
+    client.search_tweet = AsyncMock(return_value=[])
+
+    await scraper._search_hashtag(client, {"q": "#$TagAgent OR #bitcoin"}, None)
+
+    client.search_tweet.assert_awaited_once_with(
+        "$TagAgent OR #bitcoin", product="Latest", cursor=None
+    )
 
 
 def test_pack_user_extracts_author_fields():

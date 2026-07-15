@@ -27,10 +27,10 @@ curl -fsSL https://raw.githubusercontent.com/tagai-dao/tagai-data-supply/main/sc
 从 [GitHub Releases](https://github.com/tagai-dao/tagai-data-supply/releases) 下载对应平台文件，放入 PATH：
 
 ```bash
-# 示例：macOS Apple Silicon（当前最新 0.1.7）
+# 示例：macOS Apple Silicon（当前最新 0.1.8）
 mkdir -p ~/bin
 curl -fsSL -o ~/bin/tagai-node \
-  "https://github.com/tagai-dao/tagai-data-supply/releases/download/node-v0.1.7/tagai-node-darwin-arm64"
+  "https://github.com/tagai-dao/tagai-data-supply/releases/download/node-v0.1.8/tagai-node-darwin-arm64"
 chmod +x ~/bin/tagai-node
 export PATH="$HOME/bin:$PATH"
 tagai-node setup

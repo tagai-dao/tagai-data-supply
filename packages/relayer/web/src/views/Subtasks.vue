@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api } from '../api';
+import { buildTagQuery } from '../searchQuery';
 
 const list = ref<any[]>([]);
 const topics = ref<any[]>([]);
@@ -9,7 +10,7 @@ const loading = ref(false);
 const dialog = ref(false);
 
 const LISTEN_TYPES = [
-  { value: 'hashtag', label: '标签搜索', placeholder: '如 spacex, starship' },
+  { value: 'hashtag', label: '标签搜索', placeholder: '如 spacex, #starship, $TagAgent' },
   { value: 'user_timeline', label: '账号发文', placeholder: '如 elonmusk' },
   { value: 'mention', label: '@提及', placeholder: '如 SpaceX' },
   { value: 'keyword', label: '关键词', placeholder: '如 starship launch' },
@@ -49,8 +50,8 @@ function buildTask(): { type: string; params: any } | null {
   if (!content) return null;
   const t = form.value.listenType;
   if (t === 'hashtag') {
-    const tags = content.split(/[,，\s]+/).filter(Boolean).map((x) => x.replace(/^#/, ''));
-    return tags.length ? { type: 'hashtag', params: { q: tags.map((x) => '#' + x).join(' OR ') } } : null;
+    const q = buildTagQuery(content);
+    return q ? { type: 'hashtag', params: { q } } : null;
   }
   if (t === 'user_timeline') {
     const u = content.split(/[,，\s]+/).filter(Boolean).map((x) => x.replace(/^@/, ''))[0];

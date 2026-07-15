@@ -50,3 +50,26 @@ def test_apply_patch_is_idempotent_on_legacy():
     assert tx_mod.ClientTransaction.get_indices is tc._patched_get_indices
     tc.apply_twikit_transaction_patch()
     assert tx_mod.ClientTransaction.get_indices is tc._patched_get_indices
+
+
+def test_search_timeline_patch_replaces_known_stale_operation(monkeypatch):
+    from twikit.client.gql import Endpoint
+
+    monkeypatch.delenv("TAGAI_SEARCH_TIMELINE_OPERATION", raising=False)
+    monkeypatch.setattr(
+        Endpoint,
+        "SEARCH_TIMELINE",
+        f"https://x.com/i/api/graphql/{tc._STALE_SEARCH_TIMELINE_OPERATION}",
+    )
+    tc.apply_twikit_search_timeline_patch()
+    assert Endpoint.SEARCH_TIMELINE.endswith(tc._SEARCH_TIMELINE_OPERATION)
+
+
+def test_search_timeline_patch_preserves_unknown_newer_operation(monkeypatch):
+    from twikit.client.gql import Endpoint
+
+    newer = "https://x.com/i/api/graphql/newer-id/SearchTimeline"
+    monkeypatch.delenv("TAGAI_SEARCH_TIMELINE_OPERATION", raising=False)
+    monkeypatch.setattr(Endpoint, "SEARCH_TIMELINE", newer)
+    tc.apply_twikit_search_timeline_patch()
+    assert Endpoint.SEARCH_TIMELINE == newer

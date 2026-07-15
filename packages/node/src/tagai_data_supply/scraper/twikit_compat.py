@@ -5,12 +5,18 @@
 """
 from __future__ import annotations
 
+import os
 import re
 from typing import Any, Callable
 
 _PATCHED = False
 _USER_CORE_PATCHED = False
 _ORIG_USER_INIT: Callable[..., None] | None = None
+
+# twikit-ng 2.5.1 (2026-05-29) 内置的 SearchTimeline operation 已被 X 下线，
+# 旧 URL 会返回空消息的 404。保留旧值匹配，避免覆盖未来上游的新 operation。
+_STALE_SEARCH_TIMELINE_OPERATION = "R0u1RWRf748KzyGBXvOYRA/SearchTimeline"
+_SEARCH_TIMELINE_OPERATION = "Bcw3RzK-PatNAmbnw54hFw/SearchTimeline"
 
 # 新版 webpack chunk 格式（2026-03 起）
 _ON_DEMAND_FILE_REGEX = re.compile(
@@ -137,10 +143,29 @@ def apply_twikit_user_core_patch() -> None:
     _USER_CORE_PATCHED = True
 
 
+def apply_twikit_search_timeline_patch() -> None:
+    """修正 twikit-ng 2.5.1 已失效的 SearchTimeline operation ID。"""
+    try:
+        from twikit.client.gql import Endpoint
+    except ImportError:
+        return
+
+    current_url = str(getattr(Endpoint, "SEARCH_TIMELINE", "") or "")
+    override = os.environ.get("TAGAI_SEARCH_TIMELINE_OPERATION", "").strip()
+    operation = override or _SEARCH_TIMELINE_OPERATION
+    if not operation.endswith("/SearchTimeline"):
+        return
+
+    # 显式环境变量用于 X 再次轮换 operation 时紧急覆盖；默认只修已知旧值。
+    if override or current_url.endswith(_STALE_SEARCH_TIMELINE_OPERATION):
+        Endpoint.SEARCH_TIMELINE = f"https://x.com/i/api/graphql/{operation}"
+
+
 def apply_twikit_patches() -> None:
     """应用全部 twikit 兼容补丁（幂等）。"""
     apply_twikit_transaction_patch()
     apply_twikit_user_core_patch()
+    apply_twikit_search_timeline_patch()
 
 
 def scraper_install_hint() -> str:

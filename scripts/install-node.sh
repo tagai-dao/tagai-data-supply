@@ -121,8 +121,8 @@ fetch_latest_version() {
     | sed -n 's/.*"latest"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
     | head -1 || true)"
   if [[ -z "$ver" ]]; then
-    echo "警告: 无法从 Relayer 获取最新版本，使用 0.1.7" >&2
-    ver="0.1.7"
+    echo "警告: 无法从 Relayer 获取最新版本，使用 0.1.8" >&2
+    ver="0.1.8"
   fi
   echo "$ver"
 }

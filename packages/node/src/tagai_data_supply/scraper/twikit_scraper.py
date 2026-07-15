@@ -8,6 +8,7 @@ twikit 随 Twitter 改版可能失效（spec §16 已知风险），故：
 from __future__ import annotations
 import asyncio
 import logging
+import re
 from typing import Any, Optional
 
 from .twitter_api_payload import pack_twitter_api_payload, pack_quote_retweet_info, resolve_user_display_fields
@@ -163,6 +164,9 @@ class TwikitScraper:
 
     async def _search_hashtag(self, client, params, cursor):
         q = params.get("q", "")
+        # 管理端旧版本会把 cashtag `$TAG` 当作 hashtag 再加一个 `#`，
+        # 形成 X 无法匹配的 `#$TAG`。兼容已持久化的历史子任务。
+        q = re.sub(r"#\$(?=[A-Za-z0-9_])", "$", q)
         return await client.search_tweet(q, product="Latest", cursor=cursor)
 
     async def _search_keyword(self, client, params, cursor):

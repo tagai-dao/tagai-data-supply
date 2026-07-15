@@ -69,10 +69,19 @@ async def run_scraper_probe(
         }
 
     checks = report["checks"]
-    report["ok"] = any(c.get("ok") for c in checks.values())
+    # Home timeline 仅用于鉴别 Cookie/网络是否正常，不能替代实际任务。
+    # 否则搜索接口失效时会因为 Home 成功而误报“爬虫可用”。
+    report["ok"] = bool(checks["main_fetch"].get("ok"))
     if not report["ok"]:
         statuses = [c.get("cookie_status") for c in checks.values()]
-        if any(s == "auth_failed" for s in statuses):
+        main_check = checks["main_fetch"]
+        home_check = checks.get("home_timeline") or {}
+        if "404" in str(main_check.get("error") or "") and home_check.get("ok"):
+            report["hint"] = (
+                "Cookie 可用，但主任务接口返回 404；通常是 X 已轮换 GraphQL operation，"
+                "请更新 tagai-node"
+            )
+        elif any(s == "auth_failed" for s in statuses):
             report["hint"] = "cookie 可能无效或已过期，请在浏览器重新登录 X 后执行 tagai-node login"
         elif any(s == "rate_limited" for s in statuses):
             report["hint"] = "触发 X 限流，稍后再试"

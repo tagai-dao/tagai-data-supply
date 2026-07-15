@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import { api } from '../api';
+import { buildTagQuery } from '../searchQuery';
 
 const list = ref<any[]>([]);
 const loading = ref(false);
@@ -12,7 +13,7 @@ const form = ref({ name: '', tick: 'no-tick-of-tiptag' });
 
 // 监听类型选项
 const LISTEN_TYPES = [
-  { value: 'hashtag', label: '标签搜索', placeholder: '如 spacex, starship（多个用逗号分隔）', desc: '搜索包含这些 #标签 的推文' },
+  { value: 'hashtag', label: '标签搜索', placeholder: '如 spacex, #starship, $TagAgent（多个用逗号分隔）', desc: '搜索包含这些 #标签 / $代币标签 的推文' },
   { value: 'user_timeline', label: '账号发文', placeholder: '如 elonmusk, SpaceX（多个用逗号分隔）', desc: '监听这些账号发布的推文' },
   { value: 'mention', label: '@提及', placeholder: '如 SpaceX, elonmusk（多个用逗号分隔）', desc: '搜索 @提及 这些账号的推文' },
   { value: 'keyword', label: '关键词', placeholder: '如 starship launch', desc: '搜索包含该关键词的推文' },
@@ -45,8 +46,8 @@ function buildSubtasks(): { type: string; params: any }[] {
     const content = it.content.trim();
     if (!content) continue;
     if (it.type === 'hashtag') {
-      const tags = content.split(/[,，\s]+/).filter(Boolean).map((t) => t.replace(/^#/, ''));
-      if (tags.length) tasks.push({ type: 'hashtag', params: { q: tags.map((t) => '#' + t).join(' OR ') } });
+      const q = buildTagQuery(content);
+      if (q) tasks.push({ type: 'hashtag', params: { q } });
     } else if (it.type === 'user_timeline') {
       // 账号发文：每个账号一个 subtask（user_timeline 一次一个账号）
       const users = content.split(/[,，\s]+/).filter(Boolean).map((u) => u.replace(/^@/, ''));
