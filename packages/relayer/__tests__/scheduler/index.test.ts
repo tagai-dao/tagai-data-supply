@@ -26,6 +26,7 @@ function mkDeps(over: Partial<SchedulerDeps> = {}): SchedulerDeps {
   return {
     listEnabledSubtasks: jest.fn().mockResolvedValue([]),
     getSubtaskLastRunMap: jest.fn().mockResolvedValue(new Map()),
+    getSubtasksInSuccessCooldown: jest.fn().mockResolvedValue(new Set()),
     listOnlineNodes: jest.fn().mockResolvedValue([]),
     getNodeActiveAssignment: jest.fn().mockResolvedValue(null),
     dispatchTaskAssign,
@@ -52,6 +53,27 @@ describe('Scheduler (spec §8)', () => {
     const s = new Scheduler(deps);
     const r = await s.dispatchOnce();
     expect(r.dispatched).toBe(0);
+  });
+
+  it('does not dispatch a subtask during its success cooldown', async () => {
+    const dispatchTaskAssign = jest.fn().mockResolvedValue({ ok: true, assignmentId: 'asg_x' });
+    const deps = mkDeps({
+      listEnabledSubtasks: jest.fn().mockResolvedValue([mkSubtask('s1'), mkSubtask('s2')]),
+      getSubtasksInSuccessCooldown: jest.fn().mockResolvedValue(new Set(['s1'])),
+      listOnlineNodes: jest.fn().mockResolvedValue([mkNode('n1')]),
+      dispatchTaskAssign,
+    });
+
+    const r = await new Scheduler(deps).dispatchOnce();
+
+    expect(r.dispatched).toBe(1);
+    expect(deps.getSubtasksInSuccessCooldown).toHaveBeenCalledWith(10);
+    expect(dispatchTaskAssign).toHaveBeenCalledTimes(1);
+    expect(dispatchTaskAssign).toHaveBeenCalledWith(
+      expect.objectContaining({ subtask_id: 's2' }),
+      expect.any(String),
+      expect.any(Function),
+    );
   });
 
   it('serial mode (1 node): assigns one subtask, sends task_assign, sleeps after', async () => {

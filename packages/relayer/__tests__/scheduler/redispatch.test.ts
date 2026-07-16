@@ -1,5 +1,5 @@
 import { buildTaskAssignMsg, redispatchSubtask } from '../../src/scheduler/redispatch';
-import { getSubtask, getNodeActiveAssignment } from '../../src/db/tasks';
+import { getSubtask, getNodeActiveAssignment, getSubtasksInSuccessCooldown } from '../../src/db/tasks';
 import { listOnlineNodes } from '../../src/db/client';
 import { dispatchTaskAssign } from '../../src/scheduler/assign';
 
@@ -8,7 +8,10 @@ jest.mock('../../src/db/client');
 jest.mock('../../src/scheduler/assign');
 
 describe('redispatch', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (getSubtasksInSuccessCooldown as jest.Mock).mockResolvedValue(new Set());
+  });
 
   it('buildTaskAssignMsg includes watermark only (no twitter cursor)', () => {
     const msg = buildTaskAssignMsg({
@@ -37,5 +40,19 @@ describe('redispatch', () => {
       'n2',
       expect.any(Function),
     );
+  });
+
+  it('does not redispatch a subtask during its success cooldown', async () => {
+    (getSubtask as jest.Mock).mockResolvedValue({
+      subtask_id: 'st1', type: 'hashtag', mode: 'continuous', params: {}, enabled: 1,
+    });
+    (getSubtasksInSuccessCooldown as jest.Mock).mockResolvedValue(new Set(['st1']));
+
+    const ok = await redispatchSubtask('st1', ['n1']);
+
+    expect(ok).toBe(false);
+    expect(getSubtasksInSuccessCooldown).toHaveBeenCalledWith(10);
+    expect(listOnlineNodes).not.toHaveBeenCalled();
+    expect(dispatchTaskAssign).not.toHaveBeenCalled();
   });
 });

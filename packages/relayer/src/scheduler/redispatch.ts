@@ -3,10 +3,11 @@ import { logger } from '../utils/logger';
 import { registry } from '../server/connections';
 import { listOnlineNodes } from '../db/client';
 import {
-  getSubtask, getNodeActiveAssignment, type SubtaskRow,
+  getSubtask, getNodeActiveAssignment, getSubtasksInSuccessCooldown, type SubtaskRow,
 } from '../db/tasks';
 import { candidateNodes, selectNode, type DispatchableNode } from './dispatcher';
 import { dispatchTaskAssign } from './assign';
+import { SUBTASK_SUCCESS_COOLDOWN_MINUTES } from '../config/constants';
 
 export function buildTaskAssignMsg(subtask: SubtaskRow, assignmentId: string): Record<string, unknown> {
   const msg: Record<string, unknown> = {
@@ -34,6 +35,12 @@ export function sendTaskAssign(nodeId: string, msg: Record<string, unknown>): bo
 export async function redispatchSubtask(subtask_id: string, excludeNodeIds: string[]): Promise<boolean> {
   const subtask = await getSubtask(subtask_id);
   if (!subtask || !subtask.enabled) return false;
+
+  const coolingSubtaskIds = await getSubtasksInSuccessCooldown(SUBTASK_SUCCESS_COOLDOWN_MINUTES);
+  if (coolingSubtaskIds.has(subtask_id)) {
+    logger.debug({ subtask_id }, 'redispatch skipped: subtask in success cooldown');
+    return false;
+  }
 
   const online = await listOnlineNodes();
   const candidates = candidateNodes(online).filter((n) => !excludeNodeIds.includes(n.node_id));

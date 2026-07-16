@@ -24,6 +24,9 @@ export const SERIAL_NODE_THRESHOLD = 2;
 export const DISPATCH_MIN_INTERVAL_SEC = 30;
 export const DISPATCH_MAX_INTERVAL_SEC = 30;
 
+// 子任务成功完成且确实回传数据后，暂停再次派发的时间
+export const SUBTASK_SUCCESS_COOLDOWN_MINUTES = 10;
+
 // spec §8.5: 心跳与回收
 export const HEARTBEAT_PING_INTERVAL_SEC = 30;
 export const NODE_OFFLINE_TIMEOUT_SEC = 60;

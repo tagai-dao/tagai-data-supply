@@ -6,7 +6,8 @@
 
 import { logger } from '../utils/logger';
 import {
-  listEnabledSubtasks, getSubtaskLastRunMap, getNodeActiveAssignment,
+  listEnabledSubtasks, getSubtaskLastRunMap, getSubtasksInSuccessCooldown,
+  getNodeActiveAssignment,
   type SubtaskRow,
 } from '../db/tasks';
 import { listOnlineNodes } from '../db/client';
@@ -19,6 +20,7 @@ import {
   SERIAL_NODE_THRESHOLD,
   DISPATCH_MIN_INTERVAL_SEC,
   DISPATCH_MAX_INTERVAL_SEC,
+  SUBTASK_SUCCESS_COOLDOWN_MINUTES,
 } from '../config/constants';
 
 const TICK_MS = 5_000; // 调度循环间隔
@@ -26,6 +28,7 @@ const TICK_MS = 5_000; // 调度循环间隔
 export interface SchedulerDeps {
   listEnabledSubtasks: typeof listEnabledSubtasks;
   getSubtaskLastRunMap: typeof getSubtaskLastRunMap;
+  getSubtasksInSuccessCooldown: typeof getSubtasksInSuccessCooldown;
   listOnlineNodes: typeof listOnlineNodes;
   getNodeActiveAssignment: typeof getNodeActiveAssignment;
   dispatchTaskAssign: typeof dispatchTaskAssign;
@@ -38,6 +41,7 @@ export interface SchedulerDeps {
 const defaultDeps: SchedulerDeps = {
   listEnabledSubtasks,
   getSubtaskLastRunMap,
+  getSubtasksInSuccessCooldown,
   listOnlineNodes,
   getNodeActiveAssignment,
   dispatchTaskAssign,
@@ -89,8 +93,14 @@ export class Scheduler {
     const subtasks = await this.deps.listEnabledSubtasks();
     if (subtasks.length === 0) return { dispatched: 0 };
 
+    const coolingSubtaskIds = await this.deps.getSubtasksInSuccessCooldown(
+      SUBTASK_SUCCESS_COOLDOWN_MINUTES,
+    );
+    const dispatchableSubtasks = subtasks.filter((s) => !coolingSubtaskIds.has(s.subtask_id));
+    if (dispatchableSubtasks.length === 0) return { dispatched: 0 };
+
     const lastRunMap = await this.deps.getSubtaskLastRunMap();
-    const selectable: SelectableSubtask[] = subtasks.map((s) => ({
+    const selectable: SelectableSubtask[] = dispatchableSubtasks.map((s) => ({
       ...s,
       last_run_at: lastRunMap.get(s.subtask_id) ?? null,
     }));

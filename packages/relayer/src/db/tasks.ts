@@ -234,3 +234,21 @@ export async function getSubtaskLastRunMap(): Promise<Map<string, Date | null>> 
   for (const r of rows) m.set(r.subtask_id, r.last_run ?? null);
   return m;
 }
+
+/**
+ * 返回仍处于成功冷静期的子任务。
+ *
+ * 只有 assignment 已完成且 result_summary.count > 0 才进入冷静期；完成但没有
+ * 回传任何数据、失败、拒绝或回收的 assignment 都不影响后续派发。
+ * 使用 assignment.update_at 作为完成时间，使冷静期在 relayer 重启后仍然有效。
+ */
+export async function getSubtasksInSuccessCooldown(cooldownMinutes: number): Promise<Set<string>> {
+  const [rows] = await pool.execute<any[]>(
+    `SELECT DISTINCT subtask_id FROM \`tds_assignment\`
+     WHERE status = 'done'
+       AND CAST(JSON_UNQUOTE(JSON_EXTRACT(result_summary, '$.count')) AS UNSIGNED) > 0
+       AND update_at > DATE_SUB(NOW(), INTERVAL ? MINUTE)`,
+    [cooldownMinutes],
+  );
+  return new Set(rows.map((r) => String(r.subtask_id)));
+}

@@ -32,7 +32,7 @@ FLUSH PRIVILEGES;
 ```bash
 mysql -u tds_writer -p tiptag < packages/relayer/migrations/001_tds_tables.sql
 # 增量迁移（按序号执行至最新）
-mysql -u tds_writer -p tiptag < packages/relayer/migrations/011_pending_author_stats.sql
+mysql -u tds_writer -p tiptag < packages/relayer/migrations/018_assignment_success_cooldown_index.sql
 ```
 
 ### 核对线上 bsc_tweet schema（spec §5.1 Critical）
