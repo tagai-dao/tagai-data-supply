@@ -54,6 +54,8 @@ export const api = {
   reclaimNode: (id: string) => http.post(`/admin/nodes/${id}/reclaim`).then(unwrap),
   updateNodeWeight: (id: string, weight: number) =>
     http.patch(`/admin/nodes/${id}`, { weight }).then(unwrap) as Promise<{ node_id: string; weight: number }>,
+  updateNodeCookieHealth: (id: string, cookie_health: number) =>
+    http.patch(`/admin/nodes/${id}`, { cookie_health }).then(unwrap) as Promise<{ node_id: string; cookie_health: number }>,
 
   // invites
   createInvite: (label?: string) =>

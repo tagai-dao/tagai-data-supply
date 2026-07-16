@@ -2,7 +2,10 @@
 import { Router, Response } from 'express';
 import { nanoid } from 'nanoid';
 import { issueInvite } from '../auth/tokens';
-import { createInvite, listOnlineNodes, setNodeStatus, listInvites, updateNodeWeight } from '../db/client';
+import {
+  createInvite, listOnlineNodes, setNodeStatus, listInvites,
+  updateNodeWeight, updateNodeCookieHealth,
+} from '../db/client';
 import { pool } from '../db/pool';
 import {
   createTopic, listTopics, createSubtask, listEnabledSubtasks, setSubtaskEnabled,
@@ -116,13 +119,41 @@ adminRoutes.get('/nodes', asyncHandler(async (_req, res) => {
 }));
 
 adminRoutes.patch('/nodes/:id', asyncHandler(async (req, res) => {
-  const { weight } = req.body ?? {};
-  if (weight === undefined || typeof weight !== 'number') {
-    res.status(400).json({ c: 1, m: 'weight (number 1-10) required' });
+  const { weight, cookie_health: cookieHealth } = req.body ?? {};
+  if (weight === undefined && cookieHealth === undefined) {
+    res.status(400).json({ c: 1, m: 'weight or cookie_health required' });
     return;
   }
-  await updateNodeWeight(req.params.id, weight);
-  res.json({ c: 0, d: { node_id: req.params.id, weight: Math.max(1, Math.min(10, Math.round(weight))) } });
+  if (weight !== undefined && (typeof weight !== 'number' || !Number.isFinite(weight))) {
+    res.status(400).json({ c: 1, m: 'weight must be a number' });
+    return;
+  }
+  if (cookieHealth !== undefined && (
+    typeof cookieHealth !== 'number'
+    || !Number.isFinite(cookieHealth)
+    || cookieHealth < 0
+    || cookieHealth > 100
+  )) {
+    res.status(400).json({ c: 1, m: 'cookie_health must be a number from 0 to 100' });
+    return;
+  }
+
+  const result: Record<string, string | number> = { node_id: req.params.id };
+  if (weight !== undefined) {
+    const normalizedWeight = Math.max(1, Math.min(10, Math.round(weight)));
+    await updateNodeWeight(req.params.id, weight);
+    result.weight = normalizedWeight;
+  }
+  if (cookieHealth !== undefined) {
+    const normalizedHealth = Math.round(cookieHealth);
+    await updateNodeCookieHealth(req.params.id, cookieHealth);
+    result.cookie_health = normalizedHealth;
+    logger.info(
+      { node_id: req.params.id, cookie_health: normalizedHealth },
+      'node cookie health adjusted by admin',
+    );
+  }
+  res.json({ c: 0, d: result });
 }));
 
 adminRoutes.post('/nodes/:id/reclaim', asyncHandler(async (req, res) => {
@@ -132,6 +163,7 @@ adminRoutes.post('/nodes/:id/reclaim', asyncHandler(async (req, res) => {
 
 adminRoutes.post('/nodes/:id/reenable', asyncHandler(async (req, res) => {
   await reEnableNode(req.params.id);
+  logger.info({ node_id: req.params.id }, 'node re-enabled by admin');
   res.json({ c: 0, d: { node_id: req.params.id, status: 'online' } });
 }));
 

@@ -6,6 +6,7 @@ import { api } from '../api';
 const list = ref<any[]>([]);
 const loading = ref(false);
 const savingWeight = ref<string | null>(null);
+const savingHealth = ref<string | null>(null);
 let timer: any;
 
 async function load(silent = false) {
@@ -30,7 +31,7 @@ async function disable(id: string) {
 }
 async function reenable(id: string) {
   await api.reenableNode(id);
-  ElMessage.success('已重新启用');
+  ElMessage.success('已重新启用，Cookie 健康度已重置为 60');
   load();
 }
 async function reclaim(id: string) {
@@ -53,6 +54,21 @@ async function onWeightChange(row: any, value: number | undefined) {
     savingWeight.value = null;
   }
 }
+
+async function onHealthChange(row: any, value: number | undefined) {
+  if (value == null || value < 0 || value > 100) return;
+  savingHealth.value = row.node_id;
+  try {
+    const d = await api.updateNodeCookieHealth(row.node_id, value);
+    row.cookie_health = d.cookie_health;
+    ElMessage.success(`Cookie 健康度已更新为 ${d.cookie_health}`);
+  } catch (e: any) {
+    ElMessage.error(e?.message || 'Cookie 健康度更新失败');
+    load(true);
+  } finally {
+    savingHealth.value = null;
+  }
+}
 </script>
 
 <template>
@@ -70,9 +86,26 @@ async function onWeightChange(row: any, value: number | undefined) {
         </template>
       </el-table-column>
       <el-table-column prop="timezone" label="时区" width="120" />
-      <el-table-column label="cookie 健康" width="110">
+      <el-table-column label="Cookie 健康" width="170">
         <template #default="{ row }">
-          <el-progress :percentage="row.cookie_health" :stroke-width="8" :status="row.cookie_health < 30 ? 'exception' : row.cookie_health >= 70 ? 'success' : ''" />
+          <el-input-number
+            v-model="row.cookie_health"
+            :min="0"
+            :max="100"
+            :step="5"
+            size="small"
+            controls-position="right"
+            style="width: 120px"
+            :disabled="savingHealth === row.node_id"
+            @change="(v: number | undefined) => onHealthChange(row, v)"
+          />
+          <el-progress
+            :percentage="row.cookie_health"
+            :stroke-width="6"
+            :show-text="false"
+            :status="row.cookie_health < 30 ? 'exception' : row.cookie_health >= 70 ? 'success' : ''"
+            style="margin-top: 6px"
+          />
         </template>
       </el-table-column>
       <el-table-column label="调度权重" width="140">

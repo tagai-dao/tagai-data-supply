@@ -12,6 +12,7 @@ jest.mock('../../src/db/client', () => ({
   listOnlineNodes: jest.fn().mockResolvedValue([]),
   setNodeStatus: jest.fn().mockResolvedValue(undefined),
   updateNodeWeight: jest.fn().mockResolvedValue(undefined),
+  updateNodeCookieHealth: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../../src/db/tasks', () => ({
   createTopic: jest.fn(),
@@ -38,8 +39,8 @@ jest.mock('../../src/scheduler', () => ({
 
 import { issueInvite } from '../../src/auth/tokens';
 import { createSubtask, validateSubtaskTick } from '../../src/db/tasks';
-import { reclaimNodeAssignments } from '../../src/health/db';
-import { updateNodeWeight } from '../../src/db/client';
+import { reclaimNodeAssignments, reEnableNode } from '../../src/health/db';
+import { updateNodeWeight, updateNodeCookieHealth } from '../../src/db/client';
 import { pool } from '../../src/db/pool';
 import { clearLogBuffer } from '../../src/utils/logBuffer';
 import { logger } from '../../src/utils/logger';
@@ -98,6 +99,13 @@ describe('admin API (spec §12)', () => {
     expect(reclaimNodeAssignments).toHaveBeenCalledWith('n1');
   });
 
+  it('POST /admin/nodes/:id/reenable', async () => {
+    const r = await request(app).post('/admin/nodes/n1/reenable').set('Authorization', ADMIN);
+    expect(r.status).toBe(200);
+    expect(reEnableNode).toHaveBeenCalledWith('n1');
+    expect(r.body.d.status).toBe('online');
+  });
+
   it('PATCH /admin/nodes/:id updates weight', async () => {
     const r = await request(app).patch('/admin/nodes/n1').set('Authorization', ADMIN).send({ weight: 8 });
     expect(r.status).toBe(200);
@@ -108,6 +116,19 @@ describe('admin API (spec §12)', () => {
   it('PATCH /admin/nodes/:id rejects invalid weight', async () => {
     const r = await request(app).patch('/admin/nodes/n1').set('Authorization', ADMIN).send({});
     expect(r.status).toBe(400);
+  });
+
+  it('PATCH /admin/nodes/:id updates cookie health', async () => {
+    const r = await request(app).patch('/admin/nodes/n1').set('Authorization', ADMIN).send({ cookie_health: 85 });
+    expect(r.status).toBe(200);
+    expect(updateNodeCookieHealth).toHaveBeenCalledWith('n1', 85);
+    expect(r.body.d.cookie_health).toBe(85);
+  });
+
+  it('PATCH /admin/nodes/:id rejects cookie health outside 0-100', async () => {
+    const r = await request(app).patch('/admin/nodes/n1').set('Authorization', ADMIN).send({ cookie_health: 101 });
+    expect(r.status).toBe(400);
+    expect(updateNodeCookieHealth).not.toHaveBeenCalled();
   });
 
   it('GET /admin/stats', async () => {

@@ -268,10 +268,17 @@ export async function updateNodeWeight(node_id: string, weight: number): Promise
   await pool.execute('UPDATE `tds_node` SET weight = ? WHERE node_id = ?', [w, node_id]);
 }
 
+export async function updateNodeCookieHealth(node_id: string, cookie_health: number): Promise<void> {
+  const health = Math.max(0, Math.min(100, Math.round(cookie_health)));
+  await pool.execute(
+    'UPDATE `tds_node` SET cookie_health = ? WHERE node_id = ?',
+    [health, node_id],
+  );
+}
+
 export async function listOnlineNodes(): Promise<NodeRow[]> {
   const [rows] = await pool.execute<any[]>(
     "SELECT * FROM `tds_node` WHERE status = 'online'",
   );
   return rows as NodeRow[];
 }
-
